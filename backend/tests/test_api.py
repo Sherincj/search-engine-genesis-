@@ -1,9 +1,9 @@
 """
-Phase 1 API tests.
+Phase 1 API tests (updated for Phase 2 changes).
 
 Verifies:
 - /health returns 200 with expected shape
-- Placeholder endpoints return 501
+- Placeholder endpoints (search, crawl) still return 501
 """
 
 import pytest
@@ -32,33 +32,16 @@ async def test_health_returns_200(client):
 async def test_health_response_shape(client):
     data = (await client.get("/health")).json()
     assert data["status"] == "ok"
+    assert "database" in data
     assert "index_loaded" in data
     assert "document_count" in data
 
 
-# ── Placeholder endpoints return 501 ────────────────────────
+# ── Placeholder endpoints still return 501 ───────────────────
 
 @pytest.mark.asyncio
 async def test_search_not_implemented(client):
     response = await client.get("/search")
-    assert response.status_code == 501
-
-
-@pytest.mark.asyncio
-async def test_documents_post_not_implemented(client):
-    response = await client.post("/documents")
-    assert response.status_code == 501
-
-
-@pytest.mark.asyncio
-async def test_documents_get_not_implemented(client):
-    response = await client.get("/documents/1")
-    assert response.status_code == 501
-
-
-@pytest.mark.asyncio
-async def test_documents_delete_not_implemented(client):
-    response = await client.delete("/documents/1")
     assert response.status_code == 501
 
 
