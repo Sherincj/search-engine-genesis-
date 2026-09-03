@@ -30,6 +30,7 @@ from sqlalchemy.ext.asyncio import (
 from app.database.models import Base
 from app.database.database import get_db
 from app.main import app
+from app.text_processing import tokenize
 
 
 # ── Isolated in-memory database ──────────────────────────────
@@ -103,7 +104,7 @@ async def test_create_document(client):
     assert body["title"] == SAMPLE_DOC["title"]
     assert body["text"] == SAMPLE_DOC["text"]
     assert body["domain"] == "example.com"
-    assert body["word_count"] == len(SAMPLE_DOC["text"].split())
+    assert body["word_count"] == len(tokenize(SAMPLE_DOC["text"]))
     assert body["content_hash"] == hashlib.sha256(
         SAMPLE_DOC["text"].encode("utf-8")
     ).hexdigest()
@@ -341,3 +342,45 @@ async def test_domain_preserves_subdomain(client):
     )
     assert resp.status_code == 201
     assert resp.json()["domain"] == "blog.example.com"
+
+
+# ── Test 12 — Tokenizer-based word count (Phase 3) ──────────
+
+@pytest.mark.asyncio
+async def test_word_count_uses_tokenizer(client):
+    """
+    Verify word_count uses the tokeniser, not text.split().
+
+    'hello,world! foo-bar' → text.split() gives 2
+    tokenize() gives ['hello', 'world', 'foo', 'bar'] → 4
+    """
+    resp = await _create_doc(
+        client,
+        url="https://example.com/tokenizer-test",
+        text="hello,world! foo-bar",
+    )
+    assert resp.status_code == 201
+    body = resp.json()
+    # tokenizer splits on punctuation and hyphens
+    assert body["word_count"] == 4
+
+
+@pytest.mark.asyncio
+async def test_word_count_plan_verification_example(client):
+    """
+    Phase 3 plan verification example:
+    'Python, PYTHON! Python is a programming language.'
+    → tokens: python python python is a programming language
+    → word_count: 7
+    """
+    resp = await _create_doc(
+        client,
+        url="https://example.com/plan-verify",
+        text="Python, PYTHON! Python is a programming language.",
+    )
+    assert resp.status_code == 201
+    body = resp.json()
+    assert body["word_count"] == len(
+        tokenize("Python, PYTHON! Python is a programming language.")
+    )
+

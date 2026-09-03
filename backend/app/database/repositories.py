@@ -13,6 +13,10 @@ Architecture::
     SQLAlchemy AsyncSession
        ↓
     SQLite
+
+Note: word_count uses the Phase 3 tokenizer for accurate counting.
+Documents created under Phase 2 used ``text.split()``; new documents
+use tokenizer-based counting and may differ for punctuation-heavy text.
 """
 
 import hashlib
@@ -68,12 +72,15 @@ class DocumentRepository:
     @staticmethod
     def _calculate_word_count(text: str) -> int:
         """
-        Simple whitespace-based word count.
+        Token-based word count using the Phase 3 tokeniser.
 
-        A proper tokeniser will replace this in Phase 3.  For now a
-        ``str.split()`` count is good enough for the stored metadata.
+        Uses default config (lowercase, Unicode normalisation,
+        stop-word removal **off**).  Replaces the Phase 2
+        whitespace-based ``text.split()`` implementation.
         """
-        return len(text.split())
+        from app.text_processing import tokenize
+
+        return len(tokenize(text))
 
     # ── CRUD ─────────────────────────────────────────────────
 

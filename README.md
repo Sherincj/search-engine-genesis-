@@ -53,6 +53,7 @@ search-engine/
 │   │   ├── parser/        # HTML parser (Phase 10)
 │   │   ├── search/        # Search engine (Phase 5)
 │   │   ├── utils/         # Logging, timing
+│   │   ├── text_processing/ # Tokeniser, normaliser, stop words
 │   │   └── main.py        # App entry-point
 │   ├── tests/
 │   ├── pyproject.toml
@@ -235,6 +236,70 @@ curl http://localhost:8000/health
 
 The document count is always read from the actual database.
 
+## Text Processing (Phase 3)
+
+The tokeniser converts raw text into normalised tokens used for word counts,
+term frequency, and (in future phases) the inverted index, TF-IDF, and BM25.
+
+### Why tokenisation exists
+
+Raw text can't be compared reliably — `"Python"`, `"PYTHON"`, and `"python"`
+must all match. The tokeniser normalises text so documents and queries produce
+comparable tokens.
+
+### Pipeline
+
+```
+Raw text → Unicode NFC → Lowercase → Apostrophe strip → Token extraction → [Optional stop-word filter] → Tokens
+```
+
+### Default behaviour
+
+```python
+tokenize("Python is GREAT!")          # ['python', 'is', 'great']
+tokenize("web-development")          # ['web', 'development']
+tokenize("don't stop")               # ['dont', 'stop']
+tokenize("python3 web3")             # ['python3', 'web3']
+tokenize("café naïve 中文")           # ['café', 'naïve', '中文']
+tokenize("Python Python Python web") # ['python', 'python', 'python', 'web']
+```
+
+### Key rules
+
+| Input              | Tokens                    | Rule                    |
+|--------------------|---------------------------|-------------------------|
+| `web-development`  | `["web", "development"]`  | Hyphens split           |
+| `don't`            | `["dont"]`                | Apostrophes stripped    |
+| `3.14`             | `["3", "14"]`             | Dots split              |
+| `python3`          | `["python3"]`             | Alphanumeric kept whole |
+| `Python PYTHON`    | `["python", "python"]`    | Lowercase normalised    |
+
+### Stop words
+
+Disabled by default to preserve queries like `"to be or not to be"`:
+
+```python
+tokenize("python is a language")                          # ['python', 'is', 'a', 'language']
+tokenize("python is a language", remove_stopwords=True)   # ['python', 'language']
+```
+
+### Word count
+
+Documents use the tokeniser for `word_count` (not `text.split()`):
+
+```
+"hello,world! foo-bar"  →  tokenize  →  ["hello", "world", "foo", "bar"]  →  word_count: 4
+```
+
+### No stemming
+
+Stemming is **not implemented** — `programming` stays `programming`, not `program`.
+Can be evaluated later based on search quality.
+
+### Technical docs
+
+See [`docs/text-processing.md`](docs/text-processing.md) for the full specification.
+
 ## Testing
 
 ```bash
@@ -246,7 +311,7 @@ pytest tests/ -v
 
 - [x] **Phase 1** — Project structure, FastAPI, Next.js, SQLite, pytest
 - [x] **Phase 2** — Document storage & CRUD API
-- [ ] **Phase 3** — Tokenizer
+- [x] **Phase 3** — Tokenizer
 - [ ] **Phase 4** — Inverted index
 - [ ] **Phase 5** — Simple keyword search
 - [ ] **Phase 6** — TF-IDF
