@@ -300,6 +300,64 @@ Can be evaluated later based on search quality.
 
 See [`docs/text-processing.md`](docs/text-processing.md) for the full specification.
 
+## Inverted Index (Phase 4)
+
+The inverted index enables fast term lookups by reversing the document→term
+relationship:
+
+```
+Without index:  search("python") → scan every document
+With index:     search("python") → [doc 1, doc 4, doc 17]  (direct lookup)
+```
+
+### Architecture
+
+```
+Document → Tokenizer → Tokens → InvertedIndex → IndexStorage (JSON)
+```
+
+### What the index stores
+
+| Data                  | Purpose                  | Future consumer |
+|-----------------------|--------------------------|-----------------|
+| Term → posting list   | Which docs contain term  | Search          |
+| Term frequency (TF)   | How often in each doc    | TF-IDF, BM25    |
+| Token positions       | Where in the document    | Phrase search   |
+| Document frequency    | How many docs have term  | TF-IDF, BM25    |
+| Document lengths      | Token count per doc      | BM25            |
+| Average doc length    | Mean across all docs     | BM25            |
+
+### Example
+
+```
+Document 1: "Python web Python"
+Document 2: "JavaScript web"
+
+Index:
+  python     → doc 1 (TF=2, pos=[0,2])
+  javascript → doc 2 (TF=1, pos=[0])
+  web        → doc 1 (TF=1, pos=[1]), doc 2 (TF=1, pos=[1])
+```
+
+### Key design rules
+
+- **Tokens come from the Phase 3 tokenizer** — no duplicate normalization
+- **SQLite is the source of truth** — the index is derived data
+- **Duplicate document re-indexing replaces old postings** — no corruption
+- **Empty posting lists are cleaned up automatically**
+- **Posting lists are ordered by document ID**
+
+### Persistence
+
+The index is saved as JSON with atomic writes (temp file → rename).
+See [`docs/inverted-index.md`](docs/inverted-index.md) for the full specification.
+
+### Not yet implemented
+
+- Search API (`/search` remains 501)
+- TF-IDF / BM25 scoring (data stored; algorithms in Phases 6–7)
+- Crawler / vector search
+
 ## Testing
 
 ```bash
@@ -312,7 +370,7 @@ pytest tests/ -v
 - [x] **Phase 1** — Project structure, FastAPI, Next.js, SQLite, pytest
 - [x] **Phase 2** — Document storage & CRUD API
 - [x] **Phase 3** — Tokenizer
-- [ ] **Phase 4** — Inverted index
+- [x] **Phase 4** — Inverted index
 - [ ] **Phase 5** — Simple keyword search
 - [ ] **Phase 6** — TF-IDF
 - [ ] **Phase 7** — BM25
