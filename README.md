@@ -352,11 +352,61 @@ Index:
 The index is saved as JSON with atomic writes (temp file → rename).
 See [`docs/inverted-index.md`](docs/inverted-index.md) for the full specification.
 
+## Basic Keyword Search (Phase 5)
+
+The first real search pipeline:
+
+```
+GET /search?q=python+web&page=1&limit=10
+```
+
+### How it works
+
+```
+User query → Tokenizer → Inverted Index → Ranking → SQLite → Response
+```
+
+1. **Query parsing** — same tokenizer as documents (consistent normalisation)
+2. **Candidate retrieval** — OR semantics via inverted index posting lists
+3. **Ranking** — unique matched terms > total TF > document ID
+4. **Database lookup** — batch fetch, search order preserved
+5. **Pagination** — page/limit with deterministic ordering
+
+### Example response
+
+```json
+{
+  "query": "python web",
+  "total": 3,
+  "page": 1,
+  "limit": 10,
+  "results": [
+    {
+      "document_id": 3,
+      "title": "Python Web Development",
+      "url": "https://example.com/python-web",
+      "score": 2.0
+    }
+  ],
+  "took_ms": 1.42
+}
+```
+
+### Frontend
+
+A Next.js search UI is available at `http://localhost:3000` with:
+- Search input + button
+- Result list (title, URL, score)
+- Pagination
+
 ### Not yet implemented
 
-- Search API (`/search` remains 501)
-- TF-IDF / BM25 scoring (data stored; algorithms in Phases 6–7)
-- Crawler / vector search
+- TF-IDF ranking (Phase 6)
+- BM25 ranking (Phase 7)
+- Snippet generation (Phase 9)
+- Crawler (Phase 10)
+
+See [`docs/search.md`](docs/search.md) for the full specification.
 
 ## Testing
 
@@ -371,7 +421,7 @@ pytest tests/ -v
 - [x] **Phase 2** — Document storage & CRUD API
 - [x] **Phase 3** — Tokenizer
 - [x] **Phase 4** — Inverted index
-- [ ] **Phase 5** — Simple keyword search
+- [x] **Phase 5** — Basic keyword search
 - [ ] **Phase 6** — TF-IDF
 - [ ] **Phase 7** — BM25
 - [ ] **Phase 8** — Field weighting

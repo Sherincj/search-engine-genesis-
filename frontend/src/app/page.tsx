@@ -1,50 +1,136 @@
-import { checkHealth } from "../../lib/api";
+"use client";
 
-export default async function Home() {
-  let healthStatus = "Checking...";
-  let isHealthy = false;
-  let backendInfo = "";
+import { useState } from "react";
+import { searchDocuments } from "../../lib/api";
+import { SearchResponse, SearchResultItem } from "../../lib/types";
 
-  try {
-    const health = await checkHealth();
-    healthStatus = "Backend Connected";
-    isHealthy = true;
-    backendInfo = `Index Loaded: ${health.index_loaded} | Documents: ${health.document_count}`;
-  } catch (error) {
-    healthStatus = "Backend Disconnected";
-    isHealthy = false;
-    if (error instanceof Error) {
-      backendInfo = error.message;
+export default function Home() {
+  const [query, setQuery] = useState("");
+  const [results, setResults] = useState<SearchResponse | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleSearch = async (page: number = 1) => {
+    if (!query.trim()) return;
+
+    setLoading(true);
+    setError(null);
+
+    try {
+      const data = await searchDocuments(query, page, 10);
+      setResults(data);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Search failed");
+      setResults(null);
+    } finally {
+      setLoading(false);
     }
-  }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter") handleSearch();
+  };
+
+  const totalPages = results ? Math.ceil(results.total / results.limit) : 0;
 
   return (
-    <div className="grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20 font-[family-name:var(--font-geist-sans)]">
-      <main className="flex flex-col gap-8 row-start-2 items-center text-center">
-        <h1 className="text-4xl font-bold tracking-tight">Search Engine</h1>
-        
-        <div className="max-w-md w-full relative">
-          <input 
-            type="text" 
-            placeholder="Search the web..." 
-            className="w-full px-4 py-3 rounded-full border border-gray-300 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-black"
-            disabled
+    <div className="min-h-screen p-8 font-[family-name:var(--font-geist-sans)]">
+      <main className="max-w-3xl mx-auto">
+        {/* Header */}
+        <h1 className="text-4xl font-bold tracking-tight text-center mb-8">
+          Search Engine
+        </h1>
+
+        {/* Search box */}
+        <div className="flex gap-2 mb-6">
+          <input
+            type="text"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            onKeyDown={handleKeyDown}
+            placeholder="Search documents..."
+            className="flex-1 px-4 py-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 text-black dark:text-white dark:bg-gray-800 dark:border-gray-600"
           />
-          <span className="absolute right-4 top-3 text-gray-400">🔍</span>
+          <button
+            onClick={() => handleSearch()}
+            disabled={loading || !query.trim()}
+            className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium"
+          >
+            {loading ? "..." : "Search"}
+          </button>
         </div>
 
-        <div className="mt-8 p-6 bg-gray-50 rounded-xl border border-gray-100 max-w-lg w-full text-left dark:bg-gray-800 dark:border-gray-700">
-          <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3 dark:text-gray-400">
-            System Status
-          </h2>
-          <div className="flex items-center gap-3 mb-2">
-            <div className={`w-3 h-3 rounded-full ${isHealthy ? 'bg-green-500' : 'bg-red-500'}`}></div>
-            <span className="font-medium text-gray-900 dark:text-gray-100">{healthStatus}</span>
+        {/* Error */}
+        {error && (
+          <div className="p-4 mb-4 bg-red-50 border border-red-200 rounded-lg text-red-700 dark:bg-red-900/20 dark:border-red-800 dark:text-red-400">
+            {error}
           </div>
-          <p className="text-sm text-gray-600 dark:text-gray-300 font-mono">
-            {backendInfo || "Make sure the FastAPI backend is running on port 8000."}
-          </p>
-        </div>
+        )}
+
+        {/* Results */}
+        {results && (
+          <div>
+            {/* Result stats */}
+            <div className="text-sm text-gray-500 mb-4 dark:text-gray-400">
+              {results.total} result{results.total !== 1 ? "s" : ""} for
+              &ldquo;{results.query}&rdquo; ({results.took_ms.toFixed(1)} ms)
+            </div>
+
+            {/* Result list */}
+            {results.results.length === 0 ? (
+              <div className="text-gray-500 dark:text-gray-400">
+                No results found.
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {results.results.map((item: SearchResultItem) => (
+                  <div
+                    key={item.document_id}
+                    className="p-4 border border-gray-200 rounded-lg hover:border-gray-300 dark:border-gray-700 dark:hover:border-gray-600"
+                  >
+                    <a
+                      href={item.url}
+                      className="text-lg font-medium text-blue-600 hover:underline dark:text-blue-400"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      {item.title}
+                    </a>
+                    <div className="text-sm text-green-700 dark:text-green-500 mt-1">
+                      {item.url}
+                    </div>
+                    <div className="text-xs text-gray-400 mt-1">
+                      Score: {item.score} &middot; ID: {item.document_id}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Pagination */}
+            {totalPages > 1 && (
+              <div className="flex items-center justify-center gap-2 mt-6">
+                <button
+                  onClick={() => handleSearch(results.page - 1)}
+                  disabled={results.page <= 1}
+                  className="px-3 py-1 border rounded disabled:opacity-30 dark:border-gray-600"
+                >
+                  ← Prev
+                </button>
+                <span className="text-sm text-gray-600 dark:text-gray-400">
+                  Page {results.page} of {totalPages}
+                </span>
+                <button
+                  onClick={() => handleSearch(results.page + 1)}
+                  disabled={results.page >= totalPages}
+                  className="px-3 py-1 border rounded disabled:opacity-30 dark:border-gray-600"
+                >
+                  Next →
+                </button>
+              </div>
+            )}
+          </div>
+        )}
       </main>
     </div>
   );

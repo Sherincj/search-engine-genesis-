@@ -1,9 +1,10 @@
 """
-Phase 1 API tests (updated for Phase 2 changes).
+Phase 1 API tests (updated for Phase 2 and Phase 5 changes).
 
 Verifies:
 - /health returns 200 with expected shape
-- Placeholder endpoints (search, crawl) still return 501
+- /search returns 400 for empty query (now implemented)
+- Placeholder endpoints (crawl) still return 501
 """
 
 import pytest
@@ -37,12 +38,12 @@ async def test_health_response_shape(client):
     assert "document_count" in data
 
 
-# ── Placeholder endpoints still return 501 ───────────────────
+# ── Search endpoint (Phase 5) ────────────────────────────────
 
 @pytest.mark.asyncio
-async def test_search_not_implemented(client):
+async def test_search_empty_query_returns_400(client):
     response = await client.get("/search")
-    assert response.status_code == 501
+    assert response.status_code == 400
 
 
 @pytest.mark.asyncio

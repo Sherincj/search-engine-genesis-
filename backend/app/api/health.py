@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database.database import get_db
 from app.database.repositories import DocumentRepository
+from app.services.search_service import get_search_service
 
 router = APIRouter(tags=["health"])
 
@@ -30,9 +31,13 @@ async def health_check(db: AsyncSession = Depends(get_db)) -> dict:
         doc_count = 0
         db_status = "error"
 
+    service = get_search_service()
+    index_loaded = service.index.get_total_documents() > 0
+
     return {
         "status": "ok",
         "database": db_status,
-        "index_loaded": False,
+        "index_loaded": index_loaded,
         "document_count": doc_count,
     }
+

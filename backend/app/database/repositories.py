@@ -147,6 +147,39 @@ class DocumentRepository:
         )
         return result.scalar_one()
 
+    async def get_by_ids(self, document_ids: list[int]) -> list[Document]:
+        """
+        Retrieve multiple documents by ID in a single query.
+
+        The returned list preserves the order of *document_ids*.
+        IDs not found in the database are silently skipped.
+
+        Parameters
+        ----------
+        document_ids : list[int]
+            Ordered list of document IDs to fetch.
+
+        Returns
+        -------
+        list[Document]
+            Documents in the same order as *document_ids*.
+        """
+        if not document_ids:
+            return []
+
+        result = await self._session.execute(
+            select(Document).where(Document.id.in_(document_ids))
+        )
+        docs_by_id = {doc.id: doc for doc in result.scalars().all()}
+
+        # Preserve caller's ordering; skip missing IDs.
+        return [docs_by_id[did] for did in document_ids if did in docs_by_id]
+
+    async def get_all_documents(self) -> list[Document]:
+        """Return all stored documents (for index rebuilding)."""
+        result = await self._session.execute(select(Document))
+        return list(result.scalars().all())
+
     async def find_by_content_hash(self, content_hash: str) -> list[Document]:
         """
         Return all documents sharing the given content hash.
