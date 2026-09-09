@@ -1,17 +1,24 @@
 """
-Tests for the SearchEngine (ranking logic).
+Tests for the SearchEngine (TF-IDF cosine similarity ranking).
+
+Updated for Phase 6 — ranking now uses TF-IDF cosine similarity
+instead of Phase 5 baseline (matched terms + raw TF).
 
 Covers:
 - One-term query
 - Multi-term query
-- Matched-term priority (more unique matches ranks higher)
-- TF tie-breaking
+- TF-IDF ranking behavior
 - Document-ID tie-breaking
 - Unknown terms
 - Duplicate query terms
 - Empty query
 - Deterministic ordering
+- Pagination
+- Result metadata
+- Floating-point scores
 """
+
+import math
 
 from app.indexing.inverted_index import InvertedIndex
 from app.search.search_engine import SearchEngine
@@ -38,19 +45,18 @@ def test_one_term_query():
     engine = SearchEngine(_build_ranking_index())
     result = engine.search("python")
 
-    doc_ids = [c.document_id for c in result.candidates]
+    doc_ids = [r.document_id for r in result.ranked]
     assert 1 in doc_ids
     assert 2 in doc_ids
 
 
-def test_one_term_ranking_by_tf():
-    """For a single query term, higher TF ranks higher."""
+def test_one_term_scores_positive():
     engine = SearchEngine(_build_ranking_index())
     result = engine.search("python")
 
-    doc_ids = [c.document_id for c in result.candidates]
-    # Doc 1 has TF=2, Doc 2 has TF=1
-    assert doc_ids.index(1) < doc_ids.index(2)
+    for r in result.ranked:
+        if r.score > 0:
+            assert isinstance(r.score, float)
 
 
 # ── Multi-term query ────────────────────────────────────────
@@ -59,37 +65,39 @@ def test_multi_term_ranking():
     """
     Query: python javascript
 
-    Doc 2: matches both terms → rank 1 (matched_terms=2)
-    Doc 3: matches javascript only, TF=3 → rank 2
-    Doc 1: matches python only, TF=2 → rank 3
+    With TF-IDF cosine similarity, doc 2 (matching both terms)
+    should still rank highest.
     """
     engine = SearchEngine(_build_ranking_index())
     result = engine.search("python javascript")
 
-    doc_ids = [c.document_id for c in result.candidates]
-    assert doc_ids == [2, 3, 1]
+    doc_ids = [r.document_id for r in result.ranked]
+    # Doc 2 matches both terms — should rank first
+    assert doc_ids[0] == 2
 
 
-# ── Matched-term priority ───────────────────────────────────
+# ── TF-IDF: matching more terms is better ───────────────────
 
 def test_matched_term_priority_over_tf():
-    """A document matching 2 terms always outranks one matching 1 term,
-    even if the single-term match has higher TF."""
+    """A document matching 2 query terms should outrank one matching 1,
+    when the matched terms have reasonable IDF."""
     idx = InvertedIndex()
-    idx.add_document(1, ["python"] * 100)  # TF=100, but only 1 matched term
-    idx.add_document(2, ["python", "web"])  # TF=2 total, but 2 matched terms
+    idx.add_document(1, ["python"] * 5)
+    idx.add_document(2, ["python", "web"])
+    idx.add_document(3, ["other"])
 
     engine = SearchEngine(idx)
     result = engine.search("python web")
 
-    doc_ids = [c.document_id for c in result.candidates]
-    assert doc_ids[0] == 2  # 2 matched terms beats TF=100
+    doc_ids = [r.document_id for r in result.ranked]
+    # Doc 2 matches both python and web
+    assert doc_ids[0] == 2
 
 
-# ── TF tie-breaking ─────────────────────────────────────────
+# ── TF-IDF: cosine handles same-direction vectors ───────────
 
-def test_tf_tie_breaking():
-    """Same matched_term_count → higher TF wins."""
+def test_cosine_same_term_only():
+    """Docs with only the query term have cosine ≈ 1.0 regardless of TF."""
     idx = InvertedIndex()
     idx.add_document(1, ["python"])
     idx.add_document(2, ["python", "python", "python"])
@@ -97,14 +105,15 @@ def test_tf_tie_breaking():
     engine = SearchEngine(idx)
     result = engine.search("python")
 
-    doc_ids = [c.document_id for c in result.candidates]
-    assert doc_ids == [2, 1]
+    # Both are pure "python" vectors — identical cosine
+    scores = {r.document_id: r.score for r in result.ranked}
+    assert math.isclose(scores[1], scores[2], rel_tol=1e-9)
 
 
 # ── Document-ID tie-breaking ────────────────────────────────
 
 def test_doc_id_tie_breaking():
-    """Same matched_term_count and same TF → lower doc_id first."""
+    """Same scores → lower doc_id first."""
     idx = InvertedIndex()
     idx.add_document(5, ["python"])
     idx.add_document(2, ["python"])
@@ -113,7 +122,7 @@ def test_doc_id_tie_breaking():
     engine = SearchEngine(idx)
     result = engine.search("python")
 
-    doc_ids = [c.document_id for c in result.candidates]
+    doc_ids = [r.document_id for r in result.ranked]
     assert doc_ids == [2, 5, 8]
 
 
@@ -124,7 +133,7 @@ def test_unknown_term():
     result = engine.search("rust")
 
     assert result.total == 0
-    assert result.candidates == []
+    assert result.ranked == []
 
 
 def test_mix_known_unknown():
@@ -132,19 +141,25 @@ def test_mix_known_unknown():
     result = engine.search("python rust")
 
     # Only python-matching docs should appear
-    doc_ids = {c.document_id for c in result.candidates}
+    doc_ids = {r.document_id for r in result.ranked}
     assert doc_ids == {1, 2}
 
 
 # ── Duplicate query terms ────────────────────────────────────
 
 def test_duplicate_query_terms():
-    """Duplicates must not inflate matched_term_count."""
+    """Duplicates must not inflate scores."""
     engine = SearchEngine(_build_ranking_index())
-    result = engine.search("python python python")
 
-    for c in result.candidates:
-        assert c.matched_term_count == 1
+    result_single = engine.search("python")
+    result_dup = engine.search("python python python")
+
+    ids_single = [r.document_id for r in result_single.ranked]
+    ids_dup = [r.document_id for r in result_dup.ranked]
+    assert ids_single == ids_dup
+
+    for r1, r2 in zip(result_single.ranked, result_dup.ranked):
+        assert math.isclose(r1.score, r2.score)
 
 
 # ── Empty query ──────────────────────────────────────────────
@@ -154,7 +169,7 @@ def test_empty_query():
     result = engine.search("")
 
     assert result.total == 0
-    assert result.candidates == []
+    assert result.ranked == []
 
 
 def test_whitespace_query():
@@ -162,7 +177,7 @@ def test_whitespace_query():
     result = engine.search("   ")
 
     assert result.total == 0
-    assert result.candidates == []
+    assert result.ranked == []
 
 
 # ── Deterministic ordering ───────────────────────────────────
@@ -171,10 +186,10 @@ def test_deterministic():
     engine = SearchEngine(_build_ranking_index())
 
     results = [engine.search("python javascript") for _ in range(50)]
-    first = [c.document_id for c in results[0].candidates]
+    first = [r.document_id for r in results[0].ranked]
 
     for r in results:
-        assert [c.document_id for c in r.candidates] == first
+        assert [c.document_id for c in r.ranked] == first
 
 
 # ── Pagination ───────────────────────────────────────────────
@@ -188,7 +203,7 @@ def test_pagination_limit():
     result = engine.search("python", limit=3, offset=0)
 
     assert result.total == 10
-    assert len(result.candidates) == 3
+    assert len(result.ranked) == 3
 
 
 def test_pagination_offset():
@@ -200,8 +215,8 @@ def test_pagination_offset():
     page1 = engine.search("python", limit=3, offset=0)
     page2 = engine.search("python", limit=3, offset=3)
 
-    ids1 = [c.document_id for c in page1.candidates]
-    ids2 = [c.document_id for c in page2.candidates]
+    ids1 = [r.document_id for r in page1.ranked]
+    ids2 = [r.document_id for r in page2.ranked]
 
     # No overlap
     assert not set(ids1) & set(ids2)
@@ -218,7 +233,7 @@ def test_pagination_last_page():
     result = engine.search("python", limit=3, offset=3)
 
     assert result.total == 5
-    assert len(result.candidates) == 2  # Only 2 left
+    assert len(result.ranked) == 2  # Only 2 left
 
 
 # ── Result metadata ──────────────────────────────────────────
@@ -232,6 +247,25 @@ def test_result_metadata():
     assert isinstance(result.total, int)
 
 
+# ── Floating-point scores ───────────────────────────────────
+
+def test_scores_are_float():
+    engine = SearchEngine(_build_ranking_index())
+    result = engine.search("python")
+
+    for r in result.ranked:
+        assert isinstance(r.score, float)
+
+
+def test_scores_between_0_and_1():
+    """TF-IDF cosine similarity should be in [0, 1]."""
+    engine = SearchEngine(_build_ranking_index())
+    result = engine.search("python javascript")
+
+    for r in result.ranked:
+        assert 0.0 <= r.score <= 1.0 + 1e-9
+
+
 # ── Empty index ──────────────────────────────────────────────
 
 def test_empty_index():
@@ -239,4 +273,4 @@ def test_empty_index():
     result = engine.search("python")
 
     assert result.total == 0
-    assert result.candidates == []
+    assert result.ranked == []

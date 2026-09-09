@@ -385,7 +385,7 @@ User query → Tokenizer → Inverted Index → Ranking → SQLite → Response
       "document_id": 3,
       "title": "Python Web Development",
       "url": "https://example.com/python-web",
-      "score": 2.0
+      "score": 0.8241
     }
   ],
   "took_ms": 1.42
@@ -399,14 +399,32 @@ A Next.js search UI is available at `http://localhost:3000` with:
 - Result list (title, URL, score)
 - Pagination
 
+See [`docs/search.md`](docs/search.md) for the full search specification.
+
+## TF-IDF Ranking (Phase 6)
+
+Search results are ranked using **TF-IDF cosine similarity**:
+
+```
+TF(t,d)      = 1 + log(freq)         — logarithmic term frequency
+IDF(t)       = log(N / DF)           — inverse document frequency
+TF-IDF(t,d)  = TF × IDF             — combined weight
+cos(Q,D)     = (Q·D) / (|Q| × |D|)  — cosine similarity
+```
+
+Key behaviors:
+- **Rare terms** receive higher IDF → more influence on ranking
+- **Document length normalization** via cosine similarity
+- **Scores** are floats in [0, 1] (1.0 = perfect match direction)
+- **Tie-breaker**: document ID ascending
+
 ### Not yet implemented
 
-- TF-IDF ranking (Phase 6)
 - BM25 ranking (Phase 7)
 - Snippet generation (Phase 9)
 - Crawler (Phase 10)
 
-See [`docs/search.md`](docs/search.md) for the full specification.
+See [`docs/tf-idf.md`](docs/tf-idf.md) for the full TF-IDF specification.
 
 ## Testing
 
@@ -422,7 +440,7 @@ pytest tests/ -v
 - [x] **Phase 3** — Tokenizer
 - [x] **Phase 4** — Inverted index
 - [x] **Phase 5** — Basic keyword search
-- [ ] **Phase 6** — TF-IDF
+- [x] **Phase 6** — TF-IDF ranking
 - [ ] **Phase 7** — BM25
 - [ ] **Phase 8** — Field weighting
 - [ ] **Phase 9** — Snippet generation

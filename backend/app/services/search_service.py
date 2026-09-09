@@ -100,11 +100,11 @@ class SearchService:
 
         offset = (page - 1) * limit
 
-        # 1. Search engine: parse → candidate retrieval → rank → paginate
+        # 1. Search engine: parse → candidate retrieval → TF-IDF rank → paginate
         result = self._engine.search(query, limit=limit, offset=offset)
 
         # 2. Fetch documents from SQLite in ranked order
-        ranked_ids = [c.document_id for c in result.candidates]
+        ranked_ids = [r.document_id for r in result.ranked]
         repo = DocumentRepository(db)
         docs = await repo.get_by_ids(ranked_ids)
 
@@ -113,7 +113,7 @@ class SearchService:
 
         # 3. Build response items (skip stale index references)
         items: list[SearchResultItem] = []
-        for candidate in result.candidates:
+        for candidate in result.ranked:
             doc = doc_map.get(candidate.document_id)
             if doc is None:
                 # Index references a deleted document — skip silently
@@ -123,7 +123,7 @@ class SearchService:
                     document_id=candidate.document_id,
                     title=doc.title,
                     url=doc.url,
-                    score=float(candidate.matched_term_count),
+                    score=candidate.score,
                 )
             )
 

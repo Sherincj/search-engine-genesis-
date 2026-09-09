@@ -159,6 +159,19 @@ class InvertedIndex:
         """Return ``True`` if at least one document contains *term*."""
         return term in self._postings and len(self._postings[term]) > 0
 
+    def get_document_terms(self, document_id: int) -> frozenset[str]:
+        """
+        Return all terms indexed for *document_id*.
+
+        Returns a ``frozenset`` to prevent callers from mutating
+        internal state.  Returns an empty frozenset for unknown
+        documents.
+        """
+        terms = self._doc_terms.get(document_id)
+        if terms is None:
+            return frozenset()
+        return frozenset(terms)
+
     # ── Statistics ───────────────────────────────────────────
 
     def get_document_frequency(self, term: str) -> int:
