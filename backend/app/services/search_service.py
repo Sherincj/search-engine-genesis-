@@ -100,7 +100,7 @@ class SearchService:
 
         offset = (page - 1) * limit
 
-        # 1. Search engine: parse → candidate retrieval → TF-IDF rank → paginate
+        # 1. Search engine: parse → candidate retrieval → BM25 rank → paginate
         result = self._engine.search(query, limit=limit, offset=offset)
 
         # 2. Fetch documents from SQLite in ranked order

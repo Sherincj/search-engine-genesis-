@@ -1,13 +1,13 @@
 """
-Tests for the SearchEngine (TF-IDF cosine similarity ranking).
+Tests for the SearchEngine (BM25 ranking).
 
-Updated for Phase 6 — ranking now uses TF-IDF cosine similarity
-instead of Phase 5 baseline (matched terms + raw TF).
+Updated for Phase 7 — ranking now uses BM25
+instead of Phase 6 TF-IDF cosine similarity.
 
 Covers:
 - One-term query
 - Multi-term query
-- TF-IDF ranking behavior
+- BM25 ranking behavior
 - Document-ID tie-breaking
 - Unknown terms
 - Duplicate query terms
@@ -94,10 +94,10 @@ def test_matched_term_priority_over_tf():
     assert doc_ids[0] == 2
 
 
-# ── TF-IDF: cosine handles same-direction vectors ───────────
+# ── BM25: higher TF scores higher (with saturation) ─────────
 
-def test_cosine_same_term_only():
-    """Docs with only the query term have cosine ≈ 1.0 regardless of TF."""
+def test_bm25_tf_ranking():
+    """With BM25, higher TF produces higher score (saturating)."""
     idx = InvertedIndex()
     idx.add_document(1, ["python"])
     idx.add_document(2, ["python", "python", "python"])
@@ -105,9 +105,9 @@ def test_cosine_same_term_only():
     engine = SearchEngine(idx)
     result = engine.search("python")
 
-    # Both are pure "python" vectors — identical cosine
     scores = {r.document_id: r.score for r in result.ranked}
-    assert math.isclose(scores[1], scores[2], rel_tol=1e-9)
+    # Doc 2 (TF=3) should score higher than doc 1 (TF=1)
+    assert scores[2] > scores[1]
 
 
 # ── Document-ID tie-breaking ────────────────────────────────
@@ -257,13 +257,13 @@ def test_scores_are_float():
         assert isinstance(r.score, float)
 
 
-def test_scores_between_0_and_1():
-    """TF-IDF cosine similarity should be in [0, 1]."""
+def test_scores_non_negative():
+    """BM25 scores should be >= 0."""
     engine = SearchEngine(_build_ranking_index())
     result = engine.search("python javascript")
 
     for r in result.ranked:
-        assert 0.0 <= r.score <= 1.0 + 1e-9
+        assert r.score >= 0.0
 
 
 # ── Empty index ──────────────────────────────────────────────

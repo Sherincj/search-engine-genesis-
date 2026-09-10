@@ -1,18 +1,18 @@
 """
 Search engine — query → rank → results.
 
-Implements TF-IDF cosine similarity ranking (Phase 6).
+Implements BM25 ranking (Phase 7).
 
 Ranking criteria:
 
-1. **Cosine similarity** (TF-IDF) — descending
+1. **BM25 relevance score** — descending
 2. **Document ID** — ascending (deterministic tie-breaker)
 
 The search pipeline:
 
 1. Parse query (Phase 3 tokenizer)
 2. Retrieve candidates (Phase 4 inverted index, OR semantics)
-3. Rank by TF-IDF cosine similarity (Phase 6)
+3. Rank by BM25 (Phase 7)
 4. Paginate
 """
 
@@ -20,11 +20,12 @@ from __future__ import annotations
 
 import time
 
+from app.config.settings import settings
 from app.indexing.inverted_index import InvertedIndex
+from app.search.bm25_ranker import RankedCandidate
+from app.search.bm25_ranker import rank_candidates as bm25_rank
 from app.search.candidate_retrieval import retrieve_candidates
 from app.search.query_parser import parse_query
-from app.search.tfidf_ranker import RankedCandidate, rank_candidates
-from app.search.types import CandidateMatch
 from app.utils.logging import get_logger
 
 logger = get_logger(__name__)
@@ -32,7 +33,7 @@ logger = get_logger(__name__)
 
 class SearchEngine:
     """
-    Coordinates query parsing, candidate retrieval, and TF-IDF ranking.
+    Coordinates query parsing, candidate retrieval, and BM25 ranking.
 
     Independent of FastAPI and SQLAlchemy — a pure search component.
 
@@ -40,10 +41,22 @@ class SearchEngine:
     ----------
     index : InvertedIndex
         The inverted index to search against.
+    k1 : float | None
+        BM25 term-frequency saturation.  Defaults to ``settings.BM25_K1``.
+    b : float | None
+        BM25 document-length normalization.  Defaults to ``settings.BM25_B``.
     """
 
-    def __init__(self, index: InvertedIndex) -> None:
+    def __init__(
+        self,
+        index: InvertedIndex,
+        *,
+        k1: float | None = None,
+        b: float | None = None,
+    ) -> None:
         self._index = index
+        self._k1 = k1 if k1 is not None else settings.BM25_K1
+        self._b = b if b is not None else settings.BM25_B
 
     @property
     def index(self) -> InvertedIndex:
@@ -91,9 +104,12 @@ class SearchEngine:
         # 2. Retrieve candidates via inverted index (OR semantics)
         candidates = retrieve_candidates(self._index, terms)
 
-        # 3. Rank by TF-IDF cosine similarity
+        # 3. Rank by BM25
         candidate_ids = [c.document_id for c in candidates]
-        ranked = rank_candidates(terms, candidate_ids, self._index)
+        ranked = bm25_rank(
+            terms, candidate_ids, self._index,
+            k1=self._k1, b=self._b,
+        )
 
         total = len(ranked)
 

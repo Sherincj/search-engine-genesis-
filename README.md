@@ -401,30 +401,42 @@ A Next.js search UI is available at `http://localhost:3000` with:
 
 See [`docs/search.md`](docs/search.md) for the full search specification.
 
-## TF-IDF Ranking (Phase 6)
+## Ranking (Phase 6 → Phase 7)
 
-Search results are ranked using **TF-IDF cosine similarity**:
+### BM25 (Default — Phase 7)
+
+Search results are ranked using **BM25**:
 
 ```
-TF(t,d)      = 1 + log(freq)         — logarithmic term frequency
-IDF(t)       = log(N / DF)           — inverse document frequency
-TF-IDF(t,d)  = TF × IDF             — combined weight
-cos(Q,D)     = (Q·D) / (|Q| × |D|)  — cosine similarity
+BM25(D,Q) = Σ IDF(t) × f(t,D)×(k1+1) / (f(t,D) + k1×(1 - b + b×|D|/avgdl))
+IDF(t)    = log(1 + (N - DF + 0.5) / (DF + 0.5))
+```
+
+Default parameters:
+
+```
+BM25_K1 = 1.2    — term-frequency saturation
+BM25_B  = 0.75   — document-length normalization
 ```
 
 Key behaviors:
 - **Rare terms** receive higher IDF → more influence on ranking
-- **Document length normalization** via cosine similarity
-- **Scores** are floats in [0, 1] (1.0 = perfect match direction)
+- **TF saturation** via k1 — diminishing returns for repeated terms
+- **Document length normalization** via b — shorter docs rewarded
+- **Scores** are floats with no fixed upper bound (can exceed 1.0)
 - **Tie-breaker**: document ID ascending
+
+### TF-IDF (Phase 6, preserved)
+
+The Phase 6 TF-IDF cosine similarity implementation is retained for
+comparison and experimentation. See [`docs/tf-idf.md`](docs/tf-idf.md).
 
 ### Not yet implemented
 
-- BM25 ranking (Phase 7)
 - Snippet generation (Phase 9)
 - Crawler (Phase 10)
 
-See [`docs/tf-idf.md`](docs/tf-idf.md) for the full TF-IDF specification.
+See [`docs/bm25.md`](docs/bm25.md) for the full BM25 specification.
 
 ## Testing
 
@@ -441,7 +453,7 @@ pytest tests/ -v
 - [x] **Phase 4** — Inverted index
 - [x] **Phase 5** — Basic keyword search
 - [x] **Phase 6** — TF-IDF ranking
-- [ ] **Phase 7** — BM25
+- [x] **Phase 7** — BM25 ranking
 - [ ] **Phase 8** — Field weighting
 - [ ] **Phase 9** — Snippet generation
 - [ ] **Phase 10** — Crawler
