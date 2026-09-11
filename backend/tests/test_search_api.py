@@ -33,7 +33,7 @@ from sqlalchemy.ext.asyncio import (
 from app.database.database import get_db
 from app.database.models import Base
 from app.database.repositories import DocumentRepository
-from app.indexing import DocumentIndexer, IndexStorage, InvertedIndex
+from app.indexing import DocumentIndexer, FieldIndex, IndexStorage
 from app.main import app
 from app.services.search_service import SearchService, set_search_service
 
@@ -87,7 +87,7 @@ async def _setup_db():
     async with _engine.begin() as conn:
         await conn.run_sync(Base.metadata.drop_all)
     # Reset search service after each test
-    set_search_service(SearchService(InvertedIndex()))
+    set_search_service(SearchService(FieldIndex()))
     # Remove our override so it doesn't leak into other test modules
     app.dependency_overrides.pop(get_db, None)
 
@@ -113,10 +113,10 @@ async def populated_client():
             created_docs.append(doc)
 
     # Build index
-    index = InvertedIndex()
+    index = FieldIndex()
     indexer = DocumentIndexer(index)
     for doc in created_docs:
-        indexer.index_document(doc.id, doc.text)
+        indexer.index_document(doc.id, doc.text, title=doc.title)
 
     set_search_service(SearchService(index))
 
@@ -127,17 +127,17 @@ async def populated_client():
 
 # ── Helper ───────────────────────────────────────────────────
 
-async def _create_and_index_docs(session: AsyncSession) -> InvertedIndex:
+async def _create_and_index_docs(session: AsyncSession) -> FieldIndex:
     """Insert test docs into DB and build an index."""
     repo = DocumentRepository(session)
-    index = InvertedIndex()
+    index = FieldIndex()
     indexer = DocumentIndexer(index)
 
     for d in DOCS:
         doc = await repo.create_document(
             url=d["url"], title=d["title"], text=d["text"]
         )
-        indexer.index_document(doc.id, doc.text)
+        indexer.index_document(doc.id, doc.text, title=doc.title)
 
     return index
 
@@ -296,7 +296,7 @@ async def test_invalid_limit_too_large(client):
 @pytest.mark.asyncio
 async def test_search_empty_index(client):
     """Search on an empty index returns zero results, not an error."""
-    set_search_service(SearchService(InvertedIndex()))
+    set_search_service(SearchService(FieldIndex()))
     resp = await client.get("/search", params={"q": "python"})
 
     assert resp.status_code == 200
@@ -387,8 +387,8 @@ async def test_stale_index_reference():
         )
 
         # Build index with this document
-        index = InvertedIndex()
-        DocumentIndexer(index).index_document(doc.id, doc.text)
+        index = FieldIndex()
+        DocumentIndexer(index).index_document(doc.id, doc.text, title=doc.title)
 
         # Delete the document from DB
         await repo.delete_document(doc.id)
@@ -473,7 +473,7 @@ async def test_rebuild_index(tmp_path):
             )
 
         storage = IndexStorage(tmp_path / "rebuild_index")
-        service = SearchService(InvertedIndex(), storage)
+        service = SearchService(FieldIndex(), storage)
 
         # Before rebuild — empty index
         assert service.index.get_total_documents() == 0

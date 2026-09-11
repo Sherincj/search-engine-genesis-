@@ -42,6 +42,8 @@ class Settings(BaseSettings):
     # ── Ranking (placeholder — used in later phases) ─────────
     BM25_K1: float = 1.2
     BM25_B: float = 0.75
+    BM25_TITLE_WEIGHT: float = 2.0
+    BM25_BODY_WEIGHT: float = 1.0
 
     # ── Index ────────────────────────────────────────────────
     INDEX_PATH: str = str(_PROJECT_ROOT / "data" / "index")

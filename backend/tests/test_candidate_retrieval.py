@@ -11,21 +11,21 @@ Covers:
 - Match metadata (matched_terms, total_term_frequency)
 """
 
-from app.indexing.inverted_index import InvertedIndex
+from app.indexing.field_index import FieldIndex
 from app.search.candidate_retrieval import retrieve_candidates
 
 
-def _build_test_index() -> InvertedIndex:
+def _build_test_index() -> FieldIndex:
     """
     Build a small test index:
     Doc 1: python web python       (python TF=2, web TF=1)
     Doc 2: python javascript       (python TF=1, javascript TF=1)
     Doc 3: web javascript          (web TF=1, javascript TF=1)
     """
-    idx = InvertedIndex()
-    idx.add_document(1, ["python", "web", "python"])
-    idx.add_document(2, ["python", "javascript"])
-    idx.add_document(3, ["web", "javascript"])
+    idx = FieldIndex()
+    idx.add_document(1, body_tokens=["python", "web", "python"])
+    idx.add_document(2, body_tokens=["python", "javascript"])
+    idx.add_document(3, body_tokens=["web", "javascript"])
     return idx
 
 
@@ -140,6 +140,6 @@ def test_multiple_posting_lists():
 # ── Empty index ──────────────────────────────────────────────
 
 def test_empty_index():
-    idx = InvertedIndex()
+    idx = FieldIndex()
     candidates = retrieve_candidates(idx, ["python"])
-    assert candidates == []
+    assert len(candidates) == 0

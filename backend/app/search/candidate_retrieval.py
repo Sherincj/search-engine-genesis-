@@ -1,8 +1,10 @@
 """
-Candidate retrieval — find matching documents via the inverted index.
+Candidate retrieval — find matching documents via the field-aware index.
+
+Phase 8 update: now searches across **title and body** fields.
 
 Uses **OR semantics**: a document matches if it contains **any** of
-the query terms.  This maximises recall for the baseline search.
+the query terms in **any** field.  This maximises recall.
 
 No scoring happens here — just identification of candidate document IDs
 with match metadata for the ranking stage.
@@ -10,21 +12,24 @@ with match metadata for the ranking stage.
 
 from __future__ import annotations
 
-from app.indexing.inverted_index import InvertedIndex
+from app.indexing.field_index import FieldIndex
 from app.search.types import CandidateMatch
 
 
 def retrieve_candidates(
-    index: InvertedIndex,
+    index: FieldIndex,
     query_terms: list[str],
 ) -> list[CandidateMatch]:
     """
-    Retrieve candidate documents from the inverted index.
+    Retrieve candidate documents from the field-aware index.
+
+    A document is a candidate if any query term appears in its
+    title OR body.
 
     Parameters
     ----------
-    index : InvertedIndex
-        The inverted index to search.
+    index : FieldIndex
+        The field-aware inverted index to search.
     query_terms : list[str]
         Normalised query tokens (from the query parser).
         Duplicates are deduplicated internally.
@@ -34,11 +39,6 @@ def retrieve_candidates(
     list[CandidateMatch]
         One entry per matching document.  Unordered — the ranker
         will sort them.
-
-    Examples
-    --------
-    >>> retrieve_candidates(index, ["python", "web"])
-    [CandidateMatch(document_id=1, ...), CandidateMatch(document_id=2, ...)]
     """
     # Deduplicate query terms (duplicates should NOT inflate match count).
     unique_terms = set(query_terms)
@@ -47,7 +47,8 @@ def retrieve_candidates(
     candidates: dict[int, CandidateMatch] = {}
 
     for term in unique_terms:
-        for posting in index.get_postings(term):
+        # Search across all fields (title + body).
+        for posting in index.get_all_postings(term):
             doc_id = posting.document_id
 
             if doc_id not in candidates:

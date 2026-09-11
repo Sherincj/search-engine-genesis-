@@ -431,6 +431,16 @@ Key behaviors:
 The Phase 6 TF-IDF cosine similarity implementation is retained for
 comparison and experimentation. See [`docs/tf-idf.md`](docs/tf-idf.md).
 
+### Field Weighting (Phase 8)
+
+The search engine distinguishes between document fields (title vs body) and ranks them independently:
+
+```
+Score = (2.0 × Title BM25) + (1.0 × Body BM25)
+```
+
+See [`docs/field-weighting.md`](docs/field-weighting.md) for the full specification.
+
 ### Not yet implemented
 
 - Snippet generation (Phase 9)
@@ -454,7 +464,7 @@ pytest tests/ -v
 - [x] **Phase 5** — Basic keyword search
 - [x] **Phase 6** — TF-IDF ranking
 - [x] **Phase 7** — BM25 ranking
-- [ ] **Phase 8** — Field weighting
+- [x] **Phase 8** — Field weighting
 - [ ] **Phase 9** — Snippet generation
 - [ ] **Phase 10** — Crawler
 - [ ] **Phase 11** — Crawler → parser → index pipeline

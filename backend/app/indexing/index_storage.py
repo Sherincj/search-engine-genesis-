@@ -1,10 +1,12 @@
 """
-Index persistence — save and load the inverted index to/from disk.
+Index persistence — save and load the field-aware index to/from disk.
 
-Uses JSON serialisation for V1.  Human-readable, debuggable, and
-sufficient for 1K–10K documents.  The ``IndexStorage`` abstraction
-allows the format to be replaced later (e.g. with a binary format
-or a distributed index store).
+Phase 8 update: now persists ``FieldIndex`` (version 2) instead of
+a bare ``InvertedIndex``.  Old version-1 indexes are detected and
+rejected with a clear error message.
+
+Uses JSON serialisation.  Human-readable, debuggable, and sufficient
+for 1K–10K documents.
 
 Atomic writes
 -------------
@@ -19,7 +21,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from app.indexing.inverted_index import InvertedIndex
+from app.indexing.field_index import FieldIndex, INDEX_VERSION
 from app.utils.logging import get_logger
 
 logger = get_logger(__name__)
@@ -36,7 +38,7 @@ class IndexStorageError(Exception):
 
 class IndexStorage:
     """
-    Persists an ``InvertedIndex`` to the local filesystem.
+    Persists a ``FieldIndex`` to the local filesystem.
 
     Parameters
     ----------
@@ -46,7 +48,7 @@ class IndexStorage:
     Usage::
 
         storage = IndexStorage("data/index")
-        storage.save(index)
+        storage.save(field_index)
         loaded = storage.load()
     """
 
@@ -63,7 +65,7 @@ class IndexStorage:
 
     # ── Public API ───────────────────────────────────────────
 
-    def save(self, index: InvertedIndex) -> None:
+    def save(self, index: FieldIndex) -> None:
         """
         Persist *index* to disk.
 
@@ -80,20 +82,21 @@ class IndexStorage:
         # Atomic rename.
         self._temp_file.replace(self._index_file)
         logger.info(
-            "Index saved to %s (%d terms, %d documents)",
+            "Index saved to %s (%d terms, %d documents, version %d)",
             self._index_file,
             index.vocabulary_size,
             index.get_total_documents(),
+            INDEX_VERSION,
         )
 
-    def load(self) -> InvertedIndex:
+    def load(self) -> FieldIndex:
         """
-        Load an index from disk.
+        Load a field-aware index from disk.
 
         Raises
         ------
         IndexStorageError
-            If the file is missing or corrupt.
+            If the file is missing, corrupt, or uses an old format.
         """
         if not self._index_file.exists():
             raise IndexStorageError(
@@ -108,12 +111,28 @@ class IndexStorage:
                 f"Corrupt index file: {self._index_file} — {exc}"
             ) from exc
 
-        index = InvertedIndex.from_dict(data)
+        # ── Version detection ────────────────────────────────
+        version = data.get("index_version")
+        if version is None:
+            # Old Phase 7 (single-field) index detected.
+            raise IndexStorageError(
+                "Index format is outdated (pre-field-aware). "
+                "Rebuild the index for field-aware search."
+            )
+
+        try:
+            index = FieldIndex.from_dict(data)
+        except (ValueError, KeyError, TypeError) as exc:
+            raise IndexStorageError(
+                f"Invalid index data in {self._index_file}: {exc}"
+            ) from exc
+
         logger.info(
-            "Index loaded from %s (%d terms, %d documents)",
+            "Index loaded from %s (%d terms, %d documents, version %d)",
             self._index_file,
             index.vocabulary_size,
             index.get_total_documents(),
+            version,
         )
         return index
 

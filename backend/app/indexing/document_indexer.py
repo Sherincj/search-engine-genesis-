@@ -1,18 +1,15 @@
 """
 Document indexer — coordinates the document → tokenise → index pipeline.
 
-The ``DocumentIndexer`` is the single entry-point that future crawlers,
-document pipelines, and API endpoints should call to index a document::
+Phase 8 update: now indexes documents into a ``FieldIndex`` with
+separate title and body fields::
 
     Document
-       ↓
-    tokenize(document.text)
-       ↓
-    tokens
-       ↓
-    index.add_document(id, tokens)
-       ↓
-    IndexingResult
+       ├── title → tokenize → title index
+       └── text  → tokenize → body index
+
+The ``DocumentIndexer`` remains the single entry-point that future
+crawlers, document pipelines, and API endpoints should call.
 
 It does NOT:
 
@@ -27,7 +24,7 @@ from __future__ import annotations
 import time
 from dataclasses import dataclass
 
-from app.indexing.inverted_index import InvertedIndex
+from app.indexing.field_index import FieldIndex
 from app.text_processing import Tokenizer, TokenizerConfig
 from app.utils.logging import get_logger
 
@@ -46,25 +43,27 @@ class IndexingResult:
 
 class DocumentIndexer:
     """
-    Coordinates tokenisation and index insertion for documents.
+    Coordinates tokenisation and field-aware index insertion.
 
     Parameters
     ----------
-    index : InvertedIndex
-        The inverted index to populate.
+    index : FieldIndex
+        The field-aware inverted index to populate.
     tokenizer : Tokenizer | None
         Custom tokeniser instance.  Defaults to the standard config
         (lowercase, Unicode normalisation, **no** stop-word removal).
 
     Usage::
 
-        indexer = DocumentIndexer(index)
-        result = indexer.index_document(doc_id=1, text="Python web dev")
+        indexer = DocumentIndexer(field_index)
+        result = indexer.index_document(
+            doc_id=1, title="Python Guide", text="Python web dev"
+        )
     """
 
     def __init__(
         self,
-        index: InvertedIndex,
+        index: FieldIndex,
         tokenizer: Tokenizer | None = None,
     ) -> None:
         self._index = index
@@ -77,17 +76,19 @@ class DocumentIndexer:
         )
 
     @property
-    def index(self) -> InvertedIndex:
-        """The underlying inverted index."""
+    def index(self) -> FieldIndex:
+        """The underlying field-aware inverted index."""
         return self._index
 
     def index_document(
         self,
         document_id: int,
         text: str,
+        *,
+        title: str = "",
     ) -> IndexingResult:
         """
-        Tokenise *text* and add the tokens to the inverted index.
+        Tokenise title and text, then add to the field-aware index.
 
         If the document was previously indexed, the old postings are
         replaced automatically (safe for re-indexing / updates).
@@ -97,7 +98,9 @@ class DocumentIndexer:
         document_id : int
             Database primary key of the document.
         text : str
-            Raw document text.
+            Raw document body text.
+        title : str
+            Raw document title (may be empty).
 
         Returns
         -------
@@ -106,24 +109,33 @@ class DocumentIndexer:
         """
         start = time.perf_counter()
 
-        tokens = self._tokenizer.tokenize(text)
-        self._index.add_document(document_id, tokens)
+        title_tokens = self._tokenizer.tokenize(title) if title else []
+        body_tokens = self._tokenizer.tokenize(text)
+
+        self._index.add_document(
+            document_id,
+            title_tokens=title_tokens,
+            body_tokens=body_tokens,
+        )
 
         elapsed_ms = (time.perf_counter() - start) * 1000
 
-        unique_terms = len(set(tokens))
+        all_tokens = title_tokens + body_tokens
+        unique_terms = len(set(all_tokens))
 
         logger.debug(
-            "Indexed document %d: %d tokens, %d unique terms (%.1f ms)",
+            "Indexed document %d: %d title + %d body tokens, "
+            "%d unique terms (%.1f ms)",
             document_id,
-            len(tokens),
+            len(title_tokens),
+            len(body_tokens),
             unique_terms,
             elapsed_ms,
         )
 
         return IndexingResult(
             document_id=document_id,
-            token_count=len(tokens),
+            token_count=len(all_tokens),
             unique_terms=unique_terms,
             duration_ms=round(elapsed_ms, 2),
         )
@@ -141,15 +153,15 @@ class DocumentIndexer:
 
     def bulk_index(
         self,
-        documents: list[tuple[int, str]],
+        documents: list[tuple[int, str, str]],
     ) -> list[IndexingResult]:
         """
         Index multiple documents.
 
         Parameters
         ----------
-        documents : list[tuple[int, str]]
-            List of ``(document_id, text)`` pairs.
+        documents : list[tuple[int, str, str]]
+            List of ``(document_id, title, text)`` triples.
 
         Returns
         -------
@@ -157,8 +169,10 @@ class DocumentIndexer:
             One result per document.
         """
         results = []
-        for doc_id, text in documents:
-            results.append(self.index_document(doc_id, text))
+        for doc_id, title, text in documents:
+            results.append(
+                self.index_document(doc_id, text, title=title)
+            )
         logger.info(
             "Bulk indexed %d documents (%d total in index)",
             len(results),

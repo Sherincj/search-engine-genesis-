@@ -11,7 +11,7 @@ This is the main orchestration layer between:
 Architecture::
 
     SearchService
-        ├── SearchEngine  (inverted index lookups)
+        ├── SearchEngine  (field-aware inverted index lookups)
         ├── DocumentRepository  (SQLite)
         └── IndexStorage  (load / save)
 """
@@ -26,9 +26,9 @@ from app.config.settings import settings
 from app.database.repositories import DocumentRepository
 from app.indexing import (
     DocumentIndexer,
+    FieldIndex,
     IndexStorage,
     IndexStorageError,
-    InvertedIndex,
 )
 from app.models.search import SearchResponse, SearchResultItem
 from app.search.search_engine import SearchEngine
@@ -39,12 +39,12 @@ logger = get_logger(__name__)
 
 class SearchService:
     """
-    Coordinates search across the index and database.
+    Coordinates search across the field-aware index and database.
 
     Parameters
     ----------
-    index : InvertedIndex
-        The loaded inverted index.
+    index : FieldIndex | None
+        The loaded field-aware index.
     storage : IndexStorage | None
         For saving/loading the index.  Uses ``settings.INDEX_PATH``
         if not provided.
@@ -52,15 +52,15 @@ class SearchService:
 
     def __init__(
         self,
-        index: InvertedIndex | None = None,
+        index: FieldIndex | None = None,
         storage: IndexStorage | None = None,
     ) -> None:
-        self._index = index or InvertedIndex()
+        self._index = index or FieldIndex()
         self._storage = storage or IndexStorage(settings.INDEX_PATH)
         self._engine = SearchEngine(self._index)
 
     @property
-    def index(self) -> InvertedIndex:
+    def index(self) -> FieldIndex:
         return self._index
 
     @property
@@ -100,7 +100,7 @@ class SearchService:
 
         offset = (page - 1) * limit
 
-        # 1. Search engine: parse → candidate retrieval → BM25 rank → paginate
+        # 1. Search engine: parse → candidate retrieval → field-weighted BM25 → paginate
         result = self._engine.search(query, limit=limit, offset=offset)
 
         # 2. Fetch documents from SQLite in ranked order
@@ -144,8 +144,8 @@ class SearchService:
         """
         Load the persisted index from disk.
 
-        If the index file does not exist, an empty index is used.
-        Never crashes the application.
+        If the index file does not exist or is outdated (pre-field-aware),
+        an empty index is used.  Never crashes the application.
         """
         try:
             if self._storage.exists():
@@ -160,25 +160,27 @@ class SearchService:
                 logger.info("No persisted index found — starting with empty index")
         except IndexStorageError as exc:
             logger.error("Failed to load index: %s — using empty index", exc)
-            self._index = InvertedIndex()
+            self._index = FieldIndex()
             self._engine = SearchEngine(self._index)
 
     async def rebuild_index(self, db: AsyncSession) -> None:
         """
-        Rebuild the entire index from SQLite documents.
+        Rebuild the entire field-aware index from SQLite documents.
 
         1. Load all documents from the database.
-        2. Tokenise and index each one.
+        2. Tokenise title and body for each one.
         3. Persist the new index to disk.
         """
         repo = DocumentRepository(db)
         documents = await repo.get_all_documents()
 
-        new_index = InvertedIndex()
+        new_index = FieldIndex()
         indexer = DocumentIndexer(new_index)
 
         for doc in documents:
-            indexer.index_document(doc.id, doc.text)
+            indexer.index_document(
+                doc.id, doc.text, title=doc.title or ""
+            )
 
         self._storage.save(new_index)
         self._index = new_index

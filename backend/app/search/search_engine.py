@@ -1,18 +1,18 @@
 """
 Search engine — query → rank → results.
 
-Implements BM25 ranking (Phase 7).
+Implements field-weighted BM25 ranking (Phase 8).
 
 Ranking criteria:
 
-1. **BM25 relevance score** — descending
+1. **Field-weighted BM25 score** — descending
 2. **Document ID** — ascending (deterministic tie-breaker)
 
 The search pipeline:
 
 1. Parse query (Phase 3 tokenizer)
-2. Retrieve candidates (Phase 4 inverted index, OR semantics)
-3. Rank by BM25 (Phase 7)
+2. Retrieve candidates (Phase 4 inverted index, OR semantics, both fields)
+3. Rank by field-weighted BM25 (Phase 8)
 4. Paginate
 """
 
@@ -21,7 +21,7 @@ from __future__ import annotations
 import time
 
 from app.config.settings import settings
-from app.indexing.inverted_index import InvertedIndex
+from app.indexing.field_index import FieldIndex
 from app.search.bm25_ranker import RankedCandidate
 from app.search.bm25_ranker import rank_candidates as bm25_rank
 from app.search.candidate_retrieval import retrieve_candidates
@@ -33,33 +33,48 @@ logger = get_logger(__name__)
 
 class SearchEngine:
     """
-    Coordinates query parsing, candidate retrieval, and BM25 ranking.
+    Coordinates query parsing, candidate retrieval, and field-weighted
+    BM25 ranking.
 
     Independent of FastAPI and SQLAlchemy — a pure search component.
 
     Parameters
     ----------
-    index : InvertedIndex
-        The inverted index to search against.
+    index : FieldIndex
+        The field-aware inverted index to search against.
     k1 : float | None
         BM25 term-frequency saturation.  Defaults to ``settings.BM25_K1``.
     b : float | None
         BM25 document-length normalization.  Defaults to ``settings.BM25_B``.
+    title_weight : float | None
+        Title field weight.  Defaults to ``settings.BM25_TITLE_WEIGHT``.
+    body_weight : float | None
+        Body field weight.  Defaults to ``settings.BM25_BODY_WEIGHT``.
     """
 
     def __init__(
         self,
-        index: InvertedIndex,
+        index: FieldIndex,
         *,
         k1: float | None = None,
         b: float | None = None,
+        title_weight: float | None = None,
+        body_weight: float | None = None,
     ) -> None:
         self._index = index
         self._k1 = k1 if k1 is not None else settings.BM25_K1
         self._b = b if b is not None else settings.BM25_B
+        self._title_weight = (
+            title_weight if title_weight is not None
+            else settings.BM25_TITLE_WEIGHT
+        )
+        self._body_weight = (
+            body_weight if body_weight is not None
+            else settings.BM25_BODY_WEIGHT
+        )
 
     @property
-    def index(self) -> InvertedIndex:
+    def index(self) -> FieldIndex:
         return self._index
 
     def search(
@@ -101,14 +116,16 @@ class SearchEngine:
                 took_ms=round(elapsed, 2),
             )
 
-        # 2. Retrieve candidates via inverted index (OR semantics)
+        # 2. Retrieve candidates via field index (OR semantics, both fields)
         candidates = retrieve_candidates(self._index, terms)
 
-        # 3. Rank by BM25
+        # 3. Rank by field-weighted BM25
         candidate_ids = [c.document_id for c in candidates]
         ranked = bm25_rank(
             terms, candidate_ids, self._index,
             k1=self._k1, b=self._b,
+            title_weight=self._title_weight,
+            body_weight=self._body_weight,
         )
 
         total = len(ranked)
