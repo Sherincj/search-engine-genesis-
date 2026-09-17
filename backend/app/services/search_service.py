@@ -32,6 +32,7 @@ from app.indexing import (
 )
 from app.models.search import SearchResponse, SearchResultItem
 from app.search.search_engine import SearchEngine
+from app.search.snippet_generator import SnippetGenerator
 from app.utils.logging import get_logger
 
 logger = get_logger(__name__)
@@ -58,6 +59,7 @@ class SearchService:
         self._index = index or FieldIndex()
         self._storage = storage or IndexStorage(settings.INDEX_PATH)
         self._engine = SearchEngine(self._index)
+        self._snippet_gen = SnippetGenerator()
 
     @property
     def index(self) -> FieldIndex:
@@ -111,19 +113,29 @@ class SearchService:
         # Build a map for fast lookup (preserving search order)
         doc_map = {doc.id: doc for doc in docs}
 
-        # 3. Build response items (skip stale index references)
+        # 3. Build response items with snippets (skip stale index references)
         items: list[SearchResultItem] = []
         for candidate in result.ranked:
             doc = doc_map.get(candidate.document_id)
             if doc is None:
                 # Index references a deleted document — skip silently
                 continue
+
+            # Generate snippet for this result (current page only).
+            snippet_obj = self._snippet_gen.generate(
+                title=doc.title,
+                body=doc.text,
+                query_terms=result.terms,
+            )
+            snippet_html = snippet_obj.to_html() if snippet_obj else None
+
             items.append(
                 SearchResultItem(
                     document_id=candidate.document_id,
                     title=doc.title,
                     url=doc.url,
                     score=candidate.score,
+                    snippet=snippet_html,
                 )
             )
 

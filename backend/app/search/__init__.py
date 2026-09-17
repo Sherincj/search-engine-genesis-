@@ -25,6 +25,8 @@ from app.search.bm25_ranker import rank_candidates as bm25_rank_candidates
 from app.search.candidate_retrieval import retrieve_candidates
 from app.search.query_parser import parse_query
 from app.search.search_engine import SearchEngine, SearchResult
+from app.search.snippet_generator import SnippetGenerator, generate_snippet
+from app.search.snippets import Snippet, SnippetPart
 from app.search.tfidf import (
     cosine_similarity,
     inverse_document_frequency,
@@ -40,11 +42,15 @@ __all__ = [
     "SearchEngine",
     "SearchHit",
     "SearchResult",
+    "Snippet",
+    "SnippetGenerator",
+    "SnippetPart",
     "bm25_idf",
     "bm25_rank_candidates",
     "bm25_score",
     "bm25_term_score",
     "cosine_similarity",
+    "generate_snippet",
     "inverse_document_frequency",
     "parse_query",
     "retrieve_candidates",

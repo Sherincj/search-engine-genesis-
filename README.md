@@ -441,9 +441,27 @@ Score = (2.0 × Title BM25) + (1.0 × Body BM25)
 
 See [`docs/field-weighting.md`](docs/field-weighting.md) for the full specification.
 
+### Snippet Generation (Phase 9)
+
+Search results include highlighted snippets showing the most relevant
+part of each matching document:
+
+```json
+{
+  "snippet": "Learn <mark>Python</mark> programming and web <mark>development</mark>..."
+}
+```
+
+Features:
+- Match-centered windowing (prefers dense query-term clusters)
+- HTML-escaped output with `<mark>` highlighting
+- Field selection (body preferred, title fallback)
+- XSS-safe rendering
+
+See [`docs/snippets.md`](docs/snippets.md) for the full specification.
+
 ### Not yet implemented
 
-- Snippet generation (Phase 9)
 - Crawler (Phase 10)
 
 See [`docs/bm25.md`](docs/bm25.md) for the full BM25 specification.
@@ -465,7 +483,7 @@ pytest tests/ -v
 - [x] **Phase 6** — TF-IDF ranking
 - [x] **Phase 7** — BM25 ranking
 - [x] **Phase 8** — Field weighting
-- [ ] **Phase 9** — Snippet generation
+- [x] **Phase 9** — Snippet generation
 - [ ] **Phase 10** — Crawler
 - [ ] **Phase 11** — Crawler → parser → index pipeline
 - [ ] **Phase 12** — Frontend search UI

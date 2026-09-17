@@ -48,6 +48,10 @@ class Settings(BaseSettings):
     # ── Index ────────────────────────────────────────────────
     INDEX_PATH: str = str(_PROJECT_ROOT / "data" / "index")
 
+    # ── Snippets ─────────────────────────────────────────────
+    SNIPPET_LENGTH: int = 160
+    SNIPPET_MIN_LENGTH: int = 80
+
 
 # Singleton — import this everywhere instead of constructing Settings().
 settings = Settings()

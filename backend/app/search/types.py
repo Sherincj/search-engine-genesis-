@@ -41,3 +41,4 @@ class SearchHit:
     title: str
     url: str
     score: float
+    snippet: str | None = None

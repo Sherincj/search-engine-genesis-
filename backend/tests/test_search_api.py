@@ -175,6 +175,7 @@ async def test_search_result_item_shape(populated_client):
     assert "title" in item
     assert "url" in item
     assert "score" in item
+    assert "snippet" in item
 
 
 # ── Empty query → 400 ───────────────────────────────────────
@@ -487,3 +488,70 @@ async def test_rebuild_index(tmp_path):
 
         # Index persisted to disk
         assert storage.exists()
+
+
+# ── Phase 9: Snippet tests ──────────────────────────────────
+
+@pytest.mark.asyncio
+async def test_search_result_has_snippet(populated_client):
+    """Search results should include a snippet."""
+    resp = await populated_client.get("/search", params={"q": "python"})
+    data = resp.json()
+    assert data["total"] > 0
+    for item in data["results"]:
+        # Snippet should be a string (not None) for matching docs.
+        assert item["snippet"] is not None
+        assert isinstance(item["snippet"], str)
+        assert len(item["snippet"]) > 0
+
+
+@pytest.mark.asyncio
+async def test_snippet_contains_highlight(populated_client):
+    """Snippets should contain <mark> highlighting for matched terms."""
+    resp = await populated_client.get("/search", params={"q": "python"})
+    results = resp.json()["results"]
+    assert len(results) > 0
+    # At least one snippet should contain a <mark> tag.
+    any_highlighted = any("<mark>" in r["snippet"] for r in results)
+    assert any_highlighted
+
+
+@pytest.mark.asyncio
+async def test_snippet_is_null_for_no_results(populated_client):
+    """When no results match, there are no snippets to check."""
+    resp = await populated_client.get(
+        "/search", params={"q": "zzzznonexistent"}
+    )
+    data = resp.json()
+    assert data["total"] == 0
+    assert data["results"] == []
+
+
+@pytest.mark.asyncio
+async def test_snippet_html_safe(populated_client):
+    """Snippets must not contain unescaped HTML from document content."""
+    resp = await populated_client.get("/search", params={"q": "python"})
+    results = resp.json()["results"]
+    for item in results:
+        snippet = item["snippet"]
+        if snippet:
+            # No raw <script> tags should be present.
+            assert "<script>" not in snippet
+
+
+@pytest.mark.asyncio
+async def test_ranking_unchanged_with_snippets(populated_client):
+    """
+    Adding snippets must not change the ranking order.
+
+    Regression test: verify that score ordering is still descending.
+    """
+    resp = await populated_client.get(
+        "/search", params={"q": "python web"}
+    )
+    results = resp.json()["results"]
+    if len(results) > 1:
+        scores = [r["score"] for r in results]
+        for i in range(len(scores) - 1):
+            assert scores[i] >= scores[i + 1]
+

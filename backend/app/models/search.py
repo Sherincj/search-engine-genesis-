@@ -12,6 +12,7 @@ class SearchResultItem(BaseModel):
     title: str
     url: str
     score: float
+    snippet: str | None = None
 
 
 class SearchResponse(BaseModel):

@@ -99,6 +99,12 @@ export default function Home() {
                     <div className="text-sm text-green-700 dark:text-green-500 mt-1">
                       {item.url}
                     </div>
+                    {item.snippet && (
+                      <p
+                        className="text-sm text-gray-700 dark:text-gray-300 mt-2 leading-relaxed [&>mark]:bg-yellow-200 [&>mark]:text-black [&>mark]:px-0.5 [&>mark]:rounded dark:[&>mark]:bg-yellow-600 dark:[&>mark]:text-white"
+                        dangerouslySetInnerHTML={{ __html: item.snippet }}
+                      />
+                    )}
                     <div className="text-xs text-gray-400 mt-1">
                       Score: {item.score} &middot; ID: {item.document_id}
                     </div>
