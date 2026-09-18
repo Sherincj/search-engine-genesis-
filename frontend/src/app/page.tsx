@@ -1,14 +1,20 @@
 "use client";
 
 import { useState } from "react";
-import { searchDocuments } from "../../lib/api";
-import { SearchResponse, SearchResultItem } from "../../lib/types";
+import { searchDocuments, startCrawl } from "../../lib/api";
+import { SearchResponse, SearchResultItem, CrawlResponse } from "../../lib/types";
 
 export default function Home() {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<SearchResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Crawl state
+  const [crawlUrl, setCrawlUrl] = useState("");
+  const [crawling, setCrawling] = useState(false);
+  const [crawlResult, setCrawlResult] = useState<CrawlResponse | null>(null);
+  const [crawlError, setCrawlError] = useState<string | null>(null);
 
   const handleSearch = async (page: number = 1) => {
     if (!query.trim()) return;
@@ -29,6 +35,23 @@ export default function Home() {
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter") handleSearch();
+  };
+
+  const handleCrawl = async () => {
+    if (!crawlUrl.trim()) return;
+
+    setCrawling(true);
+    setCrawlError(null);
+    setCrawlResult(null);
+
+    try {
+      const data = await startCrawl(crawlUrl);
+      setCrawlResult(data);
+    } catch (err) {
+      setCrawlError(err instanceof Error ? err.message : "Crawl failed");
+    } finally {
+      setCrawling(false);
+    }
   };
 
   const totalPages = results ? Math.ceil(results.total / results.limit) : 0;
@@ -137,6 +160,59 @@ export default function Home() {
             )}
           </div>
         )}
+
+        {/* ── Crawl section ─────────────────────────────────── */}
+        <div className="mt-12 pt-8 border-t border-gray-200 dark:border-gray-700">
+          <h2 className="text-2xl font-semibold mb-4">Crawl a Website</h2>
+
+          <div className="flex gap-2 mb-4">
+            <input
+              type="text"
+              value={crawlUrl}
+              onChange={(e) => setCrawlUrl(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter") handleCrawl(); }}
+              placeholder="https://example.com"
+              className="flex-1 px-4 py-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-green-500 text-black dark:text-white dark:bg-gray-800 dark:border-gray-600"
+            />
+            <button
+              onClick={handleCrawl}
+              disabled={crawling || !crawlUrl.trim()}
+              className="px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium"
+            >
+              {crawling ? "Crawling..." : "Start Crawl"}
+            </button>
+          </div>
+
+          {/* Crawl error */}
+          {crawlError && (
+            <div className="p-4 mb-4 bg-red-50 border border-red-200 rounded-lg text-red-700 dark:bg-red-900/20 dark:border-red-800 dark:text-red-400">
+              {crawlError}
+            </div>
+          )}
+
+          {/* Crawl result */}
+          {crawlResult && (
+            <div className="p-4 bg-green-50 border border-green-200 rounded-lg dark:bg-green-900/20 dark:border-green-800">
+              <h3 className="font-semibold text-green-800 dark:text-green-400 mb-2">
+                Crawl Completed
+              </h3>
+              <div className="grid grid-cols-2 gap-2 text-sm text-green-700 dark:text-green-300">
+                <div>Pages crawled:</div>
+                <div className="font-medium">{crawlResult.pages_crawled}</div>
+                <div>Pages stored:</div>
+                <div className="font-medium">{crawlResult.pages_stored}</div>
+                <div>Pages failed:</div>
+                <div className="font-medium">{crawlResult.pages_failed}</div>
+                <div>Pages skipped:</div>
+                <div className="font-medium">{crawlResult.pages_skipped}</div>
+                <div>URLs discovered:</div>
+                <div className="font-medium">{crawlResult.discovered_urls}</div>
+                <div>Max depth reached:</div>
+                <div className="font-medium">{crawlResult.max_depth_reached}</div>
+              </div>
+            </div>
+          )}
+        </div>
       </main>
     </div>
   );

@@ -47,12 +47,15 @@ async def test_search_empty_query_returns_400(client):
 
 
 @pytest.mark.asyncio
-async def test_crawl_post_not_implemented(client):
+async def test_crawl_post_requires_body(client):
+    """POST /crawl without a request body returns 422."""
     response = await client.post("/crawl")
-    assert response.status_code == 501
+    assert response.status_code == 422
 
 
 @pytest.mark.asyncio
-async def test_crawl_get_not_implemented(client):
-    response = await client.get("/crawl/some-job-id")
-    assert response.status_code == 501
+async def test_crawl_post_rejects_invalid_url(client):
+    """POST /crawl with an invalid URL returns 422."""
+    response = await client.post("/crawl", json={"url": "not-a-url"})
+    assert response.status_code == 422
+

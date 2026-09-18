@@ -460,9 +460,24 @@ Features:
 
 See [`docs/snippets.md`](docs/snippets.md) for the full specification.
 
-### Not yet implemented
+### Web Crawler (Phase 10)
 
-- Crawler (Phase 10)
+Crawl websites to automatically ingest documents:
+
+```
+POST /crawl
+{"url": "https://example.com"}
+```
+
+Features:
+- Breadth-first, same-domain crawling
+- robots.txt compliance with conservative failure policy
+- HTML parsing (title, body, links, canonical URL)
+- URL normalization and SSRF prevention
+- Configurable limits (pages, depth, delay, response size)
+- Automatic FieldIndex updates
+
+See [`docs/crawler.md`](docs/crawler.md) for the full specification.
 
 See [`docs/bm25.md`](docs/bm25.md) for the full BM25 specification.
 
@@ -484,7 +499,7 @@ pytest tests/ -v
 - [x] **Phase 7** — BM25 ranking
 - [x] **Phase 8** — Field weighting
 - [x] **Phase 9** — Snippet generation
-- [ ] **Phase 10** — Crawler
+- [x] **Phase 10** — Web crawler
 - [ ] **Phase 11** — Crawler → parser → index pipeline
 - [ ] **Phase 12** — Frontend search UI
 - [ ] **Phase 13** — Scale testing

@@ -37,7 +37,8 @@ class Settings(BaseSettings):
     CRAWLER_TIMEOUT: int = 10          # seconds
     CRAWLER_DELAY: float = 1.0         # seconds between requests
     MAX_CRAWL_PAGES: int = 100
-    MAX_CRAWL_DEPTH: int = 2
+    MAX_CRAWL_DEPTH: int = 3
+    CRAWLER_MAX_RESPONSE_BYTES: int = 5 * 1024 * 1024  # 5 MB
 
     # ── Ranking (placeholder — used in later phases) ─────────
     BM25_K1: float = 1.2
