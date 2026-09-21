@@ -269,8 +269,77 @@ def test_scores_non_negative():
 # ── Empty index ──────────────────────────────────────────────
 
 def test_empty_index():
-    engine = SearchEngine(FieldIndex(), title_weight=0, body_weight=1)
+    idx = FieldIndex()
+    engine = SearchEngine(idx)
     result = engine.search("python")
-
     assert result.total == 0
-    assert result.ranked == []
+    assert len(result.ranked) == 0
+
+
+# ── Phase 11: Phrase Search Tests ────────────────────────────
+
+def test_phrase_query_exact_match():
+    idx = FieldIndex()
+    idx.add_document(1, body_tokens=["learn", "python", "development"])
+    idx.add_document(2, body_tokens=["python", "is", "for", "development"])
+    engine = SearchEngine(idx, phrase_boost=5.0)
+
+    # Both have "python" and "development", but only doc 1 has the exact phrase.
+    res = engine.search('"python development"')
+    assert res.total == 1
+    assert res.ranked[0].document_id == 1
+
+
+def test_mixed_query_with_phrase_boost():
+    idx = FieldIndex()
+    idx.add_document(1, body_tokens=["learn", "python", "development"])
+    idx.add_document(2, body_tokens=["python", "is", "for", "development"])
+    engine = SearchEngine(idx, phrase_boost=100.0)
+
+    # Mixed query: doc 1 gets the phrase boost, doc 2 doesn't.
+    # Without the boost, doc 2 might score similar or higher depending on length.
+    # With a massive boost, doc 1 should definitely win.
+    res = engine.search('learn "python development"')
+    assert res.total == 2
+    assert res.ranked[0].document_id == 1
+    assert res.ranked[0].score > res.ranked[1].score + 50.0
+
+
+def test_phrase_not_found():
+    idx = FieldIndex()
+    idx.add_document(1, body_tokens=["python", "is", "for", "development"])
+    engine = SearchEngine(idx)
+
+    res = engine.search('"python development"')
+    assert res.total == 0
+    assert len(res.ranked) == 0
+
+
+def test_phrase_cross_field_not_found():
+    idx = FieldIndex()
+    idx.add_document(1, title_tokens=["python"], body_tokens=["development"])
+    engine = SearchEngine(idx)
+
+    res = engine.search('"python development"')
+    assert res.total == 0
+
+
+def test_phrase_in_title_wins():
+    idx = FieldIndex()
+    idx.add_document(
+        1,
+        title_tokens=["python", "development"],
+        body_tokens=["some", "text"],
+    )
+    idx.add_document(
+        2,
+        title_tokens=["other", "text"],
+        body_tokens=["python", "development"],
+    )
+    engine = SearchEngine(idx, title_weight=2.0, body_weight=1.0)
+
+    # Both have the phrase, but doc 1 has it in the title.
+    res = engine.search('"python development"')
+    assert res.total == 2
+    assert res.ranked[0].document_id == 1
+    assert res.ranked[1].document_id == 2

@@ -28,9 +28,13 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 from app.search.snippets import Snippet, SnippetPart
 from app.text_processing import tokenize
+
+if TYPE_CHECKING:
+    from app.search.query_parser import ParsedQuery
 
 # Default snippet configuration.
 DEFAULT_SNIPPET_LENGTH = 160
@@ -81,7 +85,7 @@ class SnippetGenerator:
         self,
         title: str | None,
         body: str | None,
-        query_terms: list[str],
+        query: ParsedQuery | list[str],
     ) -> Snippet | None:
         """
         Generate a snippet for a single document.
@@ -92,26 +96,32 @@ class SnippetGenerator:
             Raw document title.
         body : str | None
             Raw document body text.
-        query_terms : list[str]
-            Normalised query terms (from the query parser).
+        query : ParsedQuery | list[str]
+            Structured query or list of terms.
 
         Returns
         -------
         Snippet | None
             A highlighted snippet, or ``None`` if no useful text exists.
         """
-        if not query_terms:
-            return None
+        from app.search.query_parser import ParsedQuery
 
-        # Deduplicate query terms.
-        unique_terms = set(query_terms)
+        if isinstance(query, ParsedQuery):
+            unique_terms = set(query.all_terms)
+            phrases = query.phrases
+        else:
+            unique_terms = set(query)
+            phrases = ()
+
+        if not unique_terms:
+            return None
 
         # ── Try body with matches ────────────────────────────
         if body and body.strip():
             occurrences = self._find_occurrences(body, unique_terms)
             if occurrences:
                 return self._build_snippet(
-                    body, occurrences, unique_terms, field="body"
+                    body, occurrences, unique_terms, phrases, field="body"
                 )
 
         # ── Try title with matches ───────────────────────────
@@ -119,7 +129,7 @@ class SnippetGenerator:
             occurrences = self._find_occurrences(title, unique_terms)
             if occurrences:
                 return self._build_snippet(
-                    title, occurrences, unique_terms, field="title"
+                    title, occurrences, unique_terms, phrases, field="title"
                 )
 
         # ── Fallback: body without matches ───────────────────
@@ -159,11 +169,11 @@ class SnippetGenerator:
         return occurrences
 
     def _choose_best_window(
-        self, text: str, occurrences: list[_TermOccurrence]
+        self, text: str, occurrences: list[_TermOccurrence], phrases: tuple
     ) -> tuple[int, int]:
         """
         Choose a character window that contains the densest cluster
-        of matched terms.
+        of matched terms and phrases.
 
         Returns ``(start, end)`` character offsets into *text*.
         """
@@ -174,11 +184,18 @@ class SnippetGenerator:
         if text_len <= max_len:
             return 0, text_len
 
-        # Sliding-window approach: find the window that covers the
-        # most unique terms.  Ties broken by leftmost position.
+        # Pre-compile regexes for phrases to check windows.
+        phrase_regexes = []
+        for phrase in phrases:
+            if not phrase.terms:
+                continue
+            # e.g., \bpython\W+development\b
+            pattern = r"\W+".join(re.escape(t) for t in phrase.terms)
+            phrase_regexes.append(re.compile(r"\b" + pattern + r"\b", re.IGNORECASE))
+
+        # Sliding-window approach
         best_start = occurrences[0].start
-        best_unique = 0
-        best_total = 0
+        best_score = -1.0
 
         for i, occ in enumerate(occurrences):
             # Window starts a bit before this occurrence.
@@ -188,7 +205,7 @@ class SnippetGenerator:
             # Adjust if we hit the end.
             win_start = max(0, win_end - max_len)
 
-            # Count unique terms in this window.
+            # Count unique terms and total terms in this window.
             unique: set[str] = set()
             total = 0
             for o in occurrences:
@@ -196,11 +213,18 @@ class SnippetGenerator:
                     unique.add(o.term)
                     total += 1
 
-            if (len(unique) > best_unique) or (
-                len(unique) == best_unique and total > best_total
-            ):
-                best_unique = len(unique)
-                best_total = total
+            # Check phrase matches in the window text.
+            window_text = text[win_start:win_end]
+            phrase_matches = 0
+            for regex in phrase_regexes:
+                if regex.search(window_text):
+                    phrase_matches += 1
+
+            # Scoring: phrase matches are worth 100 points, unique terms 10, total 1
+            score = (phrase_matches * 100) + (len(unique) * 10) + total
+
+            if score > best_score:
+                best_score = score
                 best_start = win_start
 
         win_start = best_start
@@ -240,6 +264,7 @@ class SnippetGenerator:
         text: str,
         occurrences: list[_TermOccurrence],
         terms: set[str],
+        phrases: tuple,
         field: str,
     ) -> Snippet:
         """
@@ -248,7 +273,7 @@ class SnippetGenerator:
         Chooses the best window, then builds ``SnippetPart`` segments
         that mark matched words.
         """
-        win_start, win_end = self._choose_best_window(text, occurrences)
+        win_start, win_end = self._choose_best_window(text, occurrences, phrases)
 
         # Filter occurrences to those within the window.
         window_occs = [
@@ -315,7 +340,7 @@ class SnippetGenerator:
 def generate_snippet(
     title: str | None,
     body: str | None,
-    query_terms: list[str],
+    query: ParsedQuery | list[str],
     *,
     max_length: int = DEFAULT_SNIPPET_LENGTH,
 ) -> Snippet | None:
@@ -324,5 +349,5 @@ def generate_snippet(
     a ``SnippetGenerator`` instance.
     """
     return SnippetGenerator(max_length=max_length).generate(
-        title, body, query_terms
+        title, body, query
     )

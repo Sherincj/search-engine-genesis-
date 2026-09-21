@@ -479,6 +479,23 @@ Features:
 
 See [`docs/crawler.md`](docs/crawler.md) for the full specification.
 
+### Phrase Search (Phase 11)
+
+Search for exact contiguous phrases by enclosing terms in quotes:
+
+```
+GET /search?q="python web development"
+```
+
+Features:
+- **Phrase Filtering**: Only returns documents containing the exact consecutive sequence of tokens in the same field.
+- **Phrase Boosting**: When queries contain a mix of unquoted terms and quotes, exact phrase matches receive a large configurable ranking boost (`PHRASE_BOOST = 2.0`).
+- **Cross-Field Rejection**: A phrase spanning across title and body is correctly rejected.
+- **Snippet Integration**: Snippet windows prioritize regions containing exact phrase matches.
+- Uses existing `positions` data in the inverted index, without changing the index format.
+
+See [`docs/phrase-search.md`](docs/phrase-search.md) for the full specification.
+
 See [`docs/bm25.md`](docs/bm25.md) for the full BM25 specification.
 
 ## Testing
@@ -500,9 +517,7 @@ pytest tests/ -v
 - [x] **Phase 8** — Field weighting
 - [x] **Phase 9** — Snippet generation
 - [x] **Phase 10** — Web crawler
-- [ ] **Phase 11** — Crawler → parser → index pipeline
-- [ ] **Phase 12** — Frontend search UI
-- [ ] **Phase 13** — Scale testing
+- [x] **Phase 11** — Phrase search & advanced query matching
 
 ## License
 

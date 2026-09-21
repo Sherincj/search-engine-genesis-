@@ -53,6 +53,9 @@ class Settings(BaseSettings):
     SNIPPET_LENGTH: int = 160
     SNIPPET_MIN_LENGTH: int = 80
 
+    # ── Phrase search ────────────────────────────────────────
+    PHRASE_BOOST: float = 2.0
+
 
 # Singleton — import this everywhere instead of constructing Settings().
 settings = Settings()

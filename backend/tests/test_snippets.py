@@ -30,13 +30,15 @@ from app.search.snippets import Snippet, SnippetPart
 # ── Helpers ──────────────────────────────────────────────────
 
 def _gen(
+    body: str | None,
+    terms: list[str],
+    *,
     title: str | None = None,
-    body: str | None = None,
-    terms: list[str] | None = None,
     max_length: int = 160,
 ) -> Snippet | None:
+    """Helper to generate a snippet directly."""
     return SnippetGenerator(max_length=max_length).generate(
-        title=title, body=body, query_terms=terms or []
+        title=title, body=body, query=terms
     )
 
 

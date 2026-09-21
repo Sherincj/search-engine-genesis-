@@ -86,3 +86,105 @@ def test_punctuation_only():
 def test_duplicate_terms_preserved():
     """The parser preserves duplicates; dedup happens in retrieval."""
     assert parse_query("python python") == ["python", "python"]
+
+
+# ── Phase 11: Structured query parsing ───────────────────────
+
+from app.search.query_parser import parse_query_structured
+
+
+def test_structured_basic_terms():
+    q = parse_query_structured("python development")
+    assert q.terms == ("python", "development")
+    assert q.phrases == ()
+    assert not q.has_phrases
+
+
+def test_structured_single_phrase():
+    q = parse_query_structured('"python development"')
+    assert q.terms == ()
+    assert len(q.phrases) == 1
+    assert q.phrases[0].terms == ("python", "development")
+    assert q.has_phrases
+
+
+def test_structured_mixed_query():
+    q = parse_query_structured('python "web development"')
+    assert q.terms == ("python",)
+    assert len(q.phrases) == 1
+    assert q.phrases[0].terms == ("web", "development")
+
+
+def test_structured_multiple_phrases():
+    q = parse_query_structured('"python development" "web framework"')
+    assert q.terms == ()
+    assert len(q.phrases) == 2
+    assert q.phrases[0].terms == ("python", "development")
+    assert q.phrases[1].terms == ("web", "framework")
+
+
+def test_structured_empty_phrase():
+    """Empty quotes should not produce a phrase."""
+    q = parse_query_structured('""')
+    assert q.phrases == ()
+    assert q.is_empty
+
+
+def test_structured_single_term_phrase():
+    """Single quoted term is valid."""
+    q = parse_query_structured('"python"')
+    assert len(q.phrases) == 1
+    assert q.phrases[0].terms == ("python",)
+
+
+def test_structured_unmatched_quote_opening():
+    """Unmatched opening quote — treated as normal text."""
+    q = parse_query_structured('"python development')
+    assert q.phrases == ()
+    assert "python" in q.terms
+    assert "development" in q.terms
+
+
+def test_structured_unmatched_quote_trailing():
+    """Unmatched trailing quote — treated as normal text."""
+    q = parse_query_structured('python development"')
+    assert q.phrases == ()
+    assert "python" in q.terms
+    assert "development" in q.terms
+
+
+def test_structured_phrase_normalisation():
+    """Phrase terms use the same tokenizer."""
+    q = parse_query_structured('"Python, DEVELOPMENT!"')
+    assert q.phrases[0].terms == ("python", "development")
+
+
+def test_structured_phrase_with_hyphen():
+    """Hyphens split in tokenizer, so phrase gets split terms."""
+    q = parse_query_structured('"web-development"')
+    assert q.phrases[0].terms == ("web", "development")
+
+
+def test_structured_all_terms():
+    """all_terms deduplicates across terms and phrases."""
+    q = parse_query_structured('python "python development"')
+    terms = q.all_terms
+    assert "python" in terms
+    assert "development" in terms
+    # Deduplicated
+    assert len(terms) == len(set(terms))
+
+
+def test_structured_empty_query():
+    q = parse_query_structured("")
+    assert q.is_empty
+    assert q.terms == ()
+    assert q.phrases == ()
+
+
+def test_structured_phrase_then_term():
+    q = parse_query_structured('"python development" python')
+    assert len(q.phrases) == 1
+    assert q.phrases[0].terms == ("python", "development")
+    assert "python" in q.terms
+

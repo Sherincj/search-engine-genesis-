@@ -555,3 +555,60 @@ async def test_ranking_unchanged_with_snippets(populated_client):
         for i in range(len(scores) - 1):
             assert scores[i] >= scores[i + 1]
 
+
+# ── Phase 11: Phrase API tests ───────────────────────────────
+
+@pytest.mark.asyncio
+async def test_phrase_search_api_exact_match(client):
+    from app.services.search_service import get_search_service
+
+    # Create two documents with the same words but different order/adjacency
+    async with _session_factory() as session:
+        repo = DocumentRepository(session)
+        await repo.create_document(
+            url="https://example.com/1",
+            title="A",
+            text="advanced python web development guide"
+        )
+        await repo.create_document(
+            url="https://example.com/2",
+            title="B",
+            text="python is good for web and development"
+        )
+        await session.commit()
+        await get_search_service().rebuild_index(session)
+
+    resp = await client.get('/search?q="web development"')
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["total"] == 1
+    assert data["results"][0]["title"] == "A"
+
+
+@pytest.mark.asyncio
+async def test_mixed_search_api_boost(client):
+    from app.services.search_service import get_search_service
+
+    async with _session_factory() as session:
+        repo = DocumentRepository(session)
+        await repo.create_document(
+            url="https://example.com/3",
+            title="A",
+            text="learn python web development"
+        )
+        await repo.create_document(
+            url="https://example.com/4",
+            title="B",
+            text="python for web application development"
+        )
+        await session.commit()
+        await get_search_service().rebuild_index(session)
+
+    # Mixed query: 'python' and 'web development' phrase
+    resp = await client.get('/search?q=python "web development"')
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["total"] == 2
+    # Document A has the exact phrase, so it should be ranked first due to phrase boost
+    assert data["results"][0]["title"] == "A"
+    assert data["results"][1]["title"] == "B"

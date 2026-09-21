@@ -125,7 +125,7 @@ class SearchService:
             snippet_obj = self._snippet_gen.generate(
                 title=doc.title,
                 body=doc.text,
-                query_terms=result.terms,
+                query=result.parsed_query or result.terms,
             )
             snippet_html = snippet_obj.to_html() if snippet_obj else None
 
