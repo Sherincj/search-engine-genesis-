@@ -56,6 +56,9 @@ class Settings(BaseSettings):
     # ── Phrase search ────────────────────────────────────────
     PHRASE_BOOST: float = 2.0
 
+    # ── Query processing ─────────────────────────────────────
+    QUERY_MAX_WEIGHT: float = 3.0
+
 
 # Singleton — import this everywhere instead of constructing Settings().
 settings = Settings()

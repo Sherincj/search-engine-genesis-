@@ -35,6 +35,7 @@ from app.text_processing import tokenize
 
 if TYPE_CHECKING:
     from app.search.query_parser import ParsedQuery
+    from app.search.query_processor import ProcessedQuery
 
 # Default snippet configuration.
 DEFAULT_SNIPPET_LENGTH = 160
@@ -85,7 +86,7 @@ class SnippetGenerator:
         self,
         title: str | None,
         body: str | None,
-        query: ParsedQuery | list[str],
+        query: ParsedQuery | ProcessedQuery | list[str],
     ) -> Snippet | None:
         """
         Generate a snippet for a single document.
@@ -105,8 +106,9 @@ class SnippetGenerator:
             A highlighted snippet, or ``None`` if no useful text exists.
         """
         from app.search.query_parser import ParsedQuery
+        from app.search.query_processor import ProcessedQuery
 
-        if isinstance(query, ParsedQuery):
+        if isinstance(query, (ParsedQuery, ProcessedQuery)):
             unique_terms = set(query.all_terms)
             phrases = query.phrases
         else:
@@ -340,7 +342,7 @@ class SnippetGenerator:
 def generate_snippet(
     title: str | None,
     body: str | None,
-    query: ParsedQuery | list[str],
+    query: ParsedQuery | ProcessedQuery | list[str],
     *,
     max_length: int = DEFAULT_SNIPPET_LENGTH,
 ) -> Snippet | None:

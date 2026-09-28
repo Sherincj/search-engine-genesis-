@@ -496,6 +496,15 @@ Features:
 
 See [`docs/phrase-search.md`](docs/phrase-search.md) for the full specification.
 
+### Query Processing & Search Quality (Phase 12)
+
+The engine implements lexical query weighting and normalization:
+- **Repeated Terms**: Queries with repeated terms (e.g. `python python development`) apply sublinear logarithmic scoring weights (`1 + ln(frequency)`) rather than duplicating the retrieval candidate set.
+- **Phrase Deduplication**: Repeated identical quoted phrases are collapsed to prevent artificial score explosion.
+- **Unique Term Backward Compatibility**: A standard unique term continues to carry a weight of exactly `1.0`, keeping the BM25 formula untouched.
+
+See [`docs/query-processing.md`](docs/query-processing.md) for the full specification.
+
 See [`docs/bm25.md`](docs/bm25.md) for the full BM25 specification.
 
 ## Testing
@@ -518,6 +527,8 @@ pytest tests/ -v
 - [x] **Phase 9** — Snippet generation
 - [x] **Phase 10** — Web crawler
 - [x] **Phase 11** — Phrase search & advanced query matching
+- [x] **Phase 12** — Query Processing & Search Quality
+- [ ] **Phase 13** — Frontend search UI
 
 ## License
 

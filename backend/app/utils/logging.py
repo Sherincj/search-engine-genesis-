@@ -35,6 +35,18 @@ def setup_logging(*, debug: bool = False) -> None:
     if not root.handlers:
         root.addHandler(handler)
 
+    # Silence noisy third-party loggers — they flood the console
+    # with low-level HTTP/DB chatter when the app runs in DEBUG mode.
+    _NOISY_LOGGERS = (
+        "httpcore",
+        "httpx",
+        "aiosqlite",
+        "sqlalchemy.engine.Engine",
+        "hpack",
+    )
+    for name in _NOISY_LOGGERS:
+        logging.getLogger(name).setLevel(logging.WARNING)
+
 
 def get_logger(name: str) -> logging.Logger:
     """Return a named logger."""

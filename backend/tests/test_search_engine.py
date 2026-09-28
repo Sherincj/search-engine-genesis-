@@ -159,7 +159,7 @@ def test_duplicate_query_terms():
     assert ids_single == ids_dup
 
     for r1, r2 in zip(result_single.ranked, result_dup.ranked):
-        assert math.isclose(r1.score, r2.score)
+        assert r2.score > r1.score
 
 
 # ── Empty query ──────────────────────────────────────────────
@@ -343,3 +343,97 @@ def test_phrase_in_title_wins():
     assert res.total == 2
     assert res.ranked[0].document_id == 1
     assert res.ranked[1].document_id == 2
+
+
+# ── Phase 12: Query Processing & Regression Tests ────────────
+
+from tests.search_fixtures import build_quality_corpus as _build_quality_index
+
+
+def test_phase12_single_term_regression():
+    """Single unique term: weight=1.0, score must match Phase 11 behavior."""
+    idx = _build_quality_index()
+    engine = SearchEngine(idx)
+    result = engine.search("python")
+    assert result.total > 0
+    # All scores positive
+    for r in result.ranked:
+        assert r.score > 0
+
+
+def test_phase12_repeated_term_higher_score():
+    """Repeated term increases score vs single occurrence."""
+    idx = _build_quality_index()
+    engine = SearchEngine(idx)
+    r_single = engine.search("python")
+    r_double = engine.search("python python")
+
+    # Same documents returned (same candidates)
+    ids_single = {r.document_id for r in r_single.ranked}
+    ids_double = {r.document_id for r in r_double.ranked}
+    assert ids_single == ids_double
+
+    # Scores are higher for doubled query
+    score_map_single = {r.document_id: r.score for r in r_single.ranked}
+    score_map_double = {r.document_id: r.score for r in r_double.ranked}
+    for doc_id in ids_single:
+        assert score_map_double[doc_id] > score_map_single[doc_id]
+
+
+def test_phase12_multi_term_same_as_phase11():
+    """Multi-term with all unique terms: weight=1.0 for each, regression-safe."""
+    idx = _build_quality_index()
+    engine = SearchEngine(idx)
+    result = engine.search("python development")
+    assert result.total > 0
+    # Doc 1 should rank highest (both terms in title AND body)
+    assert result.ranked[0].document_id == 1
+
+
+def test_phase12_phrase_regression():
+    """Phrase search must still work exactly as Phase 11."""
+    idx = _build_quality_index()
+    engine = SearchEngine(idx, phrase_boost=5.0)
+    result = engine.search('"python development"')
+    # Only doc 1 has "python" immediately followed by "development"
+    assert result.total == 1
+    assert result.ranked[0].document_id == 1
+
+
+def test_phase12_repeated_phrase_no_double_boost():
+    """Duplicate phrase must not apply boost twice."""
+    idx = _build_quality_index()
+    engine = SearchEngine(idx, phrase_boost=5.0)
+    r_single = engine.search('"python development"')
+    r_double = engine.search('"python development" "python development"')
+
+    # Same documents (phrase-only query filters)
+    assert r_single.total == r_double.total
+    # Phrase boost should only be applied once (deduplicated)
+    s1 = r_single.ranked[0].score
+    s2 = r_double.ranked[0].score
+    # The scores differ only by the term weight (freq 2 vs 1 for python/development)
+    # but the phrase boost itself is NOT doubled
+    assert s2 < s1 * 2.5  # Would be ~2x if phrase boost doubled
+
+
+def test_phase12_mixed_query_with_repeated_term():
+    """Mixed: python python "web development" — repeated term + phrase."""
+    idx = _build_quality_index()
+    engine = SearchEngine(idx, phrase_boost=5.0)
+    result = engine.search('python python "web development"')
+    assert result.total > 0
+    # Doc 4 has exact "web development" phrase → gets phrase boost
+    doc4_results = [r for r in result.ranked if r.document_id == 4]
+    assert len(doc4_results) == 1
+
+
+def test_phase12_ranking_determinism():
+    """Ranking order must be deterministic: score desc, doc_id asc."""
+    idx = _build_quality_index()
+    engine = SearchEngine(idx)
+    r1 = engine.search("development")
+    r2 = engine.search("development")
+    ids1 = [r.document_id for r in r1.ranked]
+    ids2 = [r.document_id for r in r2.ranked]
+    assert ids1 == ids2

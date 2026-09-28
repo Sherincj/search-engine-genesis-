@@ -41,6 +41,8 @@ from app.search.query_parser import (
     parse_query,
     parse_query_structured,
 )
+from app.search.query_processor import ProcessedQuery, QueryProcessor
+from app.search.query_weighting import query_term_weight
 from app.search.search_engine import SearchEngine, SearchResult
 from app.search.snippet_generator import SnippetGenerator, generate_snippet
 from app.search.snippets import Snippet, SnippetPart
@@ -57,7 +59,9 @@ __all__ = [
     "CandidateMatch",
     "ParsedQuery",
     "PhraseMatch",
+    "ProcessedQuery",
     "QueryPhrase",
+    "QueryProcessor",
     "RankedCandidate",
     "SearchEngine",
     "SearchHit",
@@ -77,6 +81,7 @@ __all__ = [
     "inverse_document_frequency",
     "parse_query",
     "parse_query_structured",
+    "query_term_weight",
     "retrieve_candidates",
     "term_frequency",
     "tf_idf",

@@ -41,7 +41,7 @@ class RankedCandidate:
 
 
 def rank_candidates(
-    query_terms: list[str],
+    query_terms: list[str] | dict[str, float],
     candidate_doc_ids: list[int],
     index: FieldIndex,
     *,
@@ -55,8 +55,8 @@ def rank_candidates(
 
     Parameters
     ----------
-    query_terms : list[str]
-        Normalised query tokens (from query parser).
+    query_terms : list[str] | dict[str, float]
+        Normalised query tokens, or a dictionary mapping terms to their query weights.
     candidate_doc_ids : list[int]
         Document IDs returned by candidate retrieval.
     index : FieldIndex
@@ -84,8 +84,13 @@ def rank_candidates(
     if total_docs == 0:
         return []
 
-    # Deduplicate query terms.
-    unique_query_terms = set(query_terms)
+    # Handle term weights
+    if isinstance(query_terms, dict):
+        term_weights = query_terms
+        unique_query_terms = set(term_weights.keys())
+    else:
+        term_weights = {term: 1.0 for term in query_terms}
+        unique_query_terms = set(query_terms)
 
     # ── Pre-compute per-field IDFs ────────────────────────────
     fields_config = [
@@ -149,7 +154,7 @@ def rank_candidates(
                     continue
 
                 matched.add(term)
-                field_score += bm25_term_score(
+                term_bm25 = bm25_term_score(
                     term_frequency=posting.term_frequency,
                     document_length=doc_length,
                     average_document_length=avgdl,
@@ -157,6 +162,10 @@ def rank_candidates(
                     k1=k1,
                     b=b,
                 )
+                
+                # Apply query term weight (Phase 12)
+                q_weight = term_weights.get(term, 1.0)
+                field_score += term_bm25 * q_weight
 
             total_score += weight * field_score
 

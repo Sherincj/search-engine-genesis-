@@ -26,7 +26,8 @@ from app.search.bm25_ranker import RankedCandidate
 from app.search.bm25_ranker import rank_candidates as bm25_rank
 from app.search.candidate_retrieval import retrieve_candidates
 from app.search.phrase_matching import find_phrase_matches, get_phrase_candidates
-from app.search.query_parser import parse_query, parse_query_structured, ParsedQuery
+from app.search.query_parser import ParsedQuery
+from app.search.query_processor import QueryProcessor, ProcessedQuery
 from app.utils.logging import get_logger
 
 logger = get_logger(__name__)
@@ -80,6 +81,10 @@ class SearchEngine:
             phrase_boost if phrase_boost is not None
             else settings.PHRASE_BOOST
         )
+        # Phase 12 query processor
+        self._processor = QueryProcessor(
+            max_weight=settings.QUERY_MAX_WEIGHT,
+        )
 
     @property
     def index(self) -> FieldIndex:
@@ -111,16 +116,16 @@ class SearchEngine:
         """
         start = time.perf_counter()
 
-        # 1. Parse query into structured representation.
-        parsed = parse_query_structured(query)
-        terms = list(parsed.all_terms)
+        # 1. Process query (Phase 12: includes term frequencies and weights).
+        processed = self._processor.process(query)
+        terms = list(processed.all_terms)
 
-        if parsed.is_empty:
+        if processed.is_empty:
             elapsed = (time.perf_counter() - start) * 1000
             return SearchResult(
                 query=query,
                 terms=terms,
-                parsed_query=parsed,
+                processed_query=processed,
                 ranked=[],
                 total=0,
                 took_ms=round(elapsed, 2),
@@ -130,12 +135,12 @@ class SearchEngine:
         candidates = retrieve_candidates(self._index, terms)
 
         # 3. For phrase-only queries, filter to phrase matches.
-        if parsed.has_phrases:
+        if processed.has_phrases:
             # Build set of doc IDs that match ALL phrases.
             phrase_matching_docs: set[int] | None = None
             phrase_doc_matches: dict[int, int] = {}  # doc_id → phrase match count
 
-            for phrase in parsed.phrases:
+            for phrase in processed.phrases:
                 # Get candidates that have all phrase terms.
                 phrase_candidates = get_phrase_candidates(
                     list(phrase.terms), self._index
@@ -159,23 +164,25 @@ class SearchEngine:
                     phrase_matching_docs &= verified
 
             # If query is ONLY phrases (no loose terms), filter strictly.
-            if not parsed.terms and phrase_matching_docs is not None:
+            if processed.is_phrase_only and phrase_matching_docs is not None:
                 candidates = [
                     c for c in candidates
                     if c.document_id in phrase_matching_docs
                 ]
 
-        # 4. Rank by field-weighted BM25.
+        # 4. Rank by field-weighted BM25 + Query Term Weights (Phase 12).
         candidate_ids = [c.document_id for c in candidates]
+        term_weights = {qt.term: qt.weight for qt in processed.terms}
+        
         ranked = bm25_rank(
-            terms, candidate_ids, self._index,
+            term_weights, candidate_ids, self._index,
             k1=self._k1, b=self._b,
             title_weight=self._title_weight,
             body_weight=self._body_weight,
         )
 
         # 5. Apply phrase boost.
-        if parsed.has_phrases and phrase_doc_matches:
+        if processed.has_phrases and phrase_doc_matches:
             for r in ranked:
                 match_count = phrase_doc_matches.get(r.document_id, 0)
                 if match_count > 0:
@@ -196,7 +203,7 @@ class SearchEngine:
             "Search '%s': %d terms, %d phrases, %d candidates, %.1f ms",
             query,
             len(terms),
-            len(parsed.phrases),
+            len(processed.phrases),
             total,
             elapsed,
         )
@@ -204,7 +211,7 @@ class SearchEngine:
         return SearchResult(
             query=query,
             terms=terms,
-            parsed_query=parsed,
+            processed_query=processed,
             ranked=page_ranked,
             total=total,
             took_ms=round(elapsed, 2),
@@ -214,7 +221,7 @@ class SearchEngine:
 class SearchResult:
     """Encapsulates the result of a search engine query."""
 
-    __slots__ = ("query", "terms", "parsed_query", "ranked", "total", "took_ms")
+    __slots__ = ("query", "terms", "parsed_query", "processed_query", "ranked", "total", "took_ms")
 
     def __init__(
         self,
@@ -222,6 +229,7 @@ class SearchResult:
         query: str,
         terms: list[str],
         parsed_query: ParsedQuery | None = None,
+        processed_query: ProcessedQuery | None = None,
         ranked: list[RankedCandidate],
         total: int,
         took_ms: float,
@@ -229,6 +237,7 @@ class SearchResult:
         self.query = query
         self.terms = terms
         self.parsed_query = parsed_query
+        self.processed_query = processed_query
         self.ranked = ranked
         self.total = total
         self.took_ms = took_ms
