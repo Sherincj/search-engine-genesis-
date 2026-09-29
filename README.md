@@ -507,6 +507,16 @@ See [`docs/query-processing.md`](docs/query-processing.md) for the full specific
 
 See [`docs/bm25.md`](docs/bm25.md) for the full BM25 specification.
 
+### Search Quality Evaluation (Phase 13)
+
+The engine includes a deterministic evaluation framework for measuring search quality:
+- **Metrics**: Precision@K, Recall@K, F1@K, MRR, MAP, NDCG@K
+- **Dataset**: 30 controlled documents, 20 evaluation queries across 6 categories
+- **Baseline**: Stored metrics for regression comparison
+- **CLI**: `python -m scripts.evaluate_search` with JSON and comparison modes
+
+See [`docs/search-evaluation.md`](backend/docs/search-evaluation.md) for the full specification.
+
 ## Testing
 
 ```bash
@@ -528,7 +538,7 @@ pytest tests/ -v
 - [x] **Phase 10** — Web crawler
 - [x] **Phase 11** — Phrase search & advanced query matching
 - [x] **Phase 12** — Query Processing & Search Quality
-- [ ] **Phase 13** — Frontend search UI
+- [x] **Phase 13** — Search Quality Evaluation & Relevance Metrics
 
 ## License
 

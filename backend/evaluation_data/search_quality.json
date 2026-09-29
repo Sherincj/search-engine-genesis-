@@ -1,0 +1,160 @@
+{
+  "queries": [
+    {
+      "id": "q001",
+      "query": "python",
+      "category": "single_term",
+      "judgments": {
+        "1": 3, "5": 3, "8": 2, "11": 3, "16": 3, "19": 3, "20": 1, "21": 1, "30": 3
+      }
+    },
+    {
+      "id": "q002",
+      "query": "database",
+      "category": "single_term",
+      "judgments": {
+        "4": 3, "13": 3, "23": 3
+      }
+    },
+    {
+      "id": "q003",
+      "query": "security",
+      "category": "single_term",
+      "judgments": {
+        "7": 3, "16": 3, "26": 3
+      }
+    },
+    {
+      "id": "q004",
+      "query": "testing",
+      "category": "single_term",
+      "judgments": {
+        "8": 3, "17": 3, "27": 3
+      }
+    },
+    {
+      "id": "q005",
+      "query": "python web development",
+      "category": "multi_term",
+      "judgments": {
+        "1": 3, "3": 2, "22": 3, "30": 2
+      }
+    },
+    {
+      "id": "q006",
+      "query": "machine learning API",
+      "category": "multi_term",
+      "judgments": {
+        "5": 3, "14": 2, "24": 2
+      }
+    },
+    {
+      "id": "q007",
+      "query": "javascript full stack",
+      "category": "multi_term",
+      "judgments": {
+        "2": 3, "12": 2, "22": 3
+      }
+    },
+    {
+      "id": "q008",
+      "query": "database normalization sql",
+      "category": "multi_term",
+      "judgments": {
+        "4": 2, "23": 3
+      }
+    },
+    {
+      "id": "q009",
+      "query": "\"machine learning\"",
+      "category": "phrase",
+      "judgments": {
+        "5": 3, "14": 3, "24": 3
+      }
+    },
+    {
+      "id": "q010",
+      "query": "\"web development\"",
+      "category": "phrase",
+      "judgments": {
+        "1": 2, "3": 3, "7": 2, "12": 3, "22": 3, "30": 2
+      }
+    },
+    {
+      "id": "q011",
+      "query": "\"data science\"",
+      "category": "phrase",
+      "judgments": {
+        "1": 2, "10": 3, "19": 3, "29": 2
+      }
+    },
+    {
+      "id": "q012",
+      "query": "python \"web development\"",
+      "category": "mixed",
+      "judgments": {
+        "1": 3, "22": 3, "30": 2
+      }
+    },
+    {
+      "id": "q013",
+      "query": "\"machine learning\" API",
+      "category": "mixed",
+      "judgments": {
+        "5": 2
+      }
+    },
+    {
+      "id": "q014",
+      "query": "secure \"REST API\"",
+      "category": "mixed",
+      "judgments": {
+        "6": 2, "25": 1
+      }
+    },
+    {
+      "id": "q015",
+      "query": "python python",
+      "category": "repeated_term",
+      "judgments": {
+        "1": 3, "11": 3, "20": 2, "21": 2
+      }
+    },
+    {
+      "id": "q016",
+      "query": "test test test",
+      "category": "repeated_term",
+      "judgments": {
+        "8": 3, "17": 3, "27": 3
+      }
+    },
+    {
+      "id": "q017",
+      "query": "supercalifragilisticexpialidocious",
+      "category": "zero_result",
+      "judgments": {}
+    },
+    {
+      "id": "q018",
+      "query": "xyzabc123",
+      "category": "zero_result",
+      "judgments": {}
+    },
+    {
+      "id": "q019",
+      "query": "PyThOn",
+      "category": "single_term",
+      "judgments": {
+        "1": 3, "11": 3, "30": 3
+      }
+    },
+    {
+      "id": "q020",
+      "query": "JAVASCRIPT",
+      "category": "single_term",
+      "judgments": {
+        "2": 3, "12": 3, "22": 3, "30": 3
+      }
+    }
+  ]
+}
