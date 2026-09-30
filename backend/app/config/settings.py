@@ -59,6 +59,16 @@ class Settings(BaseSettings):
     # ── Query processing ─────────────────────────────────────
     QUERY_MAX_WEIGHT: float = 3.0
 
+    # ── Embeddings (Phase 14) ────────────────────────────────
+    EMBEDDING_ENABLED: bool = False
+    EMBEDDING_MODEL: str = "all-MiniLM-L6-v2"
+    EMBEDDING_BATCH_SIZE: int = 32
+    EMBEDDING_NORMALIZE: bool = True
+
+    # ── Vector index (Phase 14) ──────────────────────────────
+    VECTOR_INDEX_PATH: str = str(_PROJECT_ROOT / "data" / "vector_index")
+    VECTOR_INDEX_VERSION: int = 1
+
 
 # Singleton — import this everywhere instead of constructing Settings().
 settings = Settings()

@@ -17,9 +17,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database.database import get_db
 from app.database.repositories import DocumentRepository, DuplicateURLError
+from app.config.settings import settings
 from app.models.document import DocumentCreate, DocumentResponse
+from app.services.semantic_index_service import (
+    SemanticIndexServiceError,
+    get_semantic_index_service,
+)
+from app.utils.logging import get_logger
 
 router = APIRouter(prefix="/documents", tags=["documents"])
+logger = get_logger(__name__)
 
 
 # ── POST /documents ──────────────────────────────────────────
@@ -49,6 +56,12 @@ async def create_document(
             status_code=409,
             detail="A document with this URL already exists.",
         )
+
+    if settings.EMBEDDING_ENABLED:
+        try:
+            get_semantic_index_service().index_document(doc.id, doc.title, doc.text)
+        except SemanticIndexServiceError as exc:
+            logger.error("Document %d was not vector-indexed: %s", doc.id, exc)
 
     return DocumentResponse.model_validate(doc)
 
@@ -83,3 +96,9 @@ async def delete_document(
 
     if not deleted:
         raise HTTPException(status_code=404, detail="Document not found.")
+
+    if settings.EMBEDDING_ENABLED:
+        try:
+            get_semantic_index_service().remove_document(document_id)
+        except SemanticIndexServiceError as exc:
+            logger.error("Document %d vector cleanup failed: %s", document_id, exc)
