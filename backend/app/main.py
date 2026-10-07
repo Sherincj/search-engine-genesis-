@@ -23,6 +23,7 @@ from app.utils.logging import setup_logging, get_logger
 from app.api.health import router as health_router
 from app.api.search import router as search_router
 from app.api.semantic_search import router as semantic_router
+from app.api.hybrid_search import router as hybrid_router
 from app.api.documents import router as documents_router
 from app.api.crawl import router as crawl_router
 
@@ -63,5 +64,6 @@ app.add_middleware(
 app.include_router(health_router)
 app.include_router(search_router)
 app.include_router(semantic_router)
+app.include_router(hybrid_router)
 app.include_router(documents_router)
 app.include_router(crawl_router)

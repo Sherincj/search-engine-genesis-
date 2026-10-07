@@ -69,6 +69,11 @@ class Settings(BaseSettings):
     VECTOR_INDEX_PATH: str = str(_PROJECT_ROOT / "data" / "vector_index")
     VECTOR_INDEX_VERSION: int = 1
 
+    # ── Hybrid search (Phase 15) ─────────────────────────────
+    HYBRID_LEXICAL_WEIGHT: float = 0.5
+    HYBRID_SEMANTIC_WEIGHT: float = 0.5
+    HYBRID_CANDIDATE_LIMIT: int = 50
+
 
 # Singleton — import this everywhere instead of constructing Settings().
 settings = Settings()
